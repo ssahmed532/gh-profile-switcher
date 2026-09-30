@@ -49,12 +49,12 @@ function GitValue([string]$Directory,[string]$Key) { (Run git @('config','--get'
 
 try {
     $r = Script @('--version','-ConfigPath',(Join-Path $scratch 'missing.json'))
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.1.1' -and -not $r.Error) '--version prints only v0.1.1 without config'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.2.0' -and -not $r.Error) '--version prints only v0.2.0 without config'
     $r = Script @('-Version')
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.1.1') 'PowerShell -Version alias'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.2.0') 'PowerShell -Version alias'
     $r = Script @('--version') $scratch @{ PATH='' }
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.1.1' -and -not $r.Error) 'Version works without Git, gh or OpenSSH on PATH'
-    Assert (([System.Management.Automation.SemanticVersion]::Parse($r.Out.Substring(1))).ToString() -ceq '0.1.1') 'Release version is valid SemVer'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.2.0' -and -not $r.Error) 'Version works without Git, gh or OpenSSH on PATH'
+    Assert (([System.Management.Automation.SemanticVersion]::Parse($r.Out.Substring(1))).ToString() -ceq '0.2.0') 'Release version is valid SemVer'
     $errors = $null; $tokens = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($scriptFile,[ref]$tokens,[ref]$errors)
     Assert ($errors.Count -eq 0) 'Script parses'
@@ -204,6 +204,14 @@ function Protect-Text
     $status=$r.Out | ConvertFrom-Json
     Assert ($status.ExpectedProfile -eq 'personal' -and ($status.Issues -join ' ') -match 'Effective Git identity differs' -and ($status.Issues -join ' ') -match 'AUTHOR differs') 'Status detects expected/effective and author overrides'
     Assert ($status.PushDestinations[0].Authentication -eq 'unverified' -and $status.PushDestinations[0].ConfiguredHttpsUsername -eq 'personal-user') 'Status does not claim a verified push account'
+    $r=Script @('status','-ConfigPath',$testConfig,'-Color','Always') $moved
+    Good $r 'Forced rich status entrypoint'
+    Assert ($r.Out -match '◇ ghprofile' -and $r.Out -match '\x1b\[' -and $r.Out -match 'ATTENTION') 'Color Always preserves styled output through redirection'
+    $r=Script @('status','-ConfigPath',$testConfig,'-Plain','-Color','Always') $moved
+    Good $r 'Plain status entrypoint'
+    Assert ($r.Out -notmatch '\x1b|◇ ghprofile' -and $r.Out -match 'Directory\s+:') 'Plain overrides forced color'
+    $r=Script @('status','-ConfigPath',$testConfig) $moved
+    Assert ($r.Code -eq 0 -and $r.Out -notmatch '\x1b|◇ ghprofile') 'Automatic redirected output remains plain'
     $r=Script @('doctor','-ConfigPath',$testConfig,'-Json','-NonInteractive') $moved
     Assert ($r.Code -eq 2 -and ($r.Out | ConvertFrom-Json).Healthy -eq $false) 'Doctor returns exit 2 for diagnostic findings'
     Good (Run git @('remote','set-url','origin','git@github.com:example/repo.git') $moved) 'Use SSH remote'

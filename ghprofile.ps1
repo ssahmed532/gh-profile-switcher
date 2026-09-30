@@ -14,10 +14,12 @@ param(
     [string]$ConfigPath = (Join-Path $PSScriptRoot 'profiles.json'),
     [Alias('-version')][switch]$Version,
     [switch]$Json,
+    [switch]$Plain,
+    [ValidateSet('Auto','Always','Never')][string]$Color = 'Auto',
     [switch]$NonInteractive
 )
 
-$ScriptVersion = '0.1.1'
+$ScriptVersion = '0.2.0'
 if ($Version -or $Command -eq '--version') { Write-Output "v$ScriptVersion"; exit 0 }
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -423,6 +425,61 @@ function Format-Status {
     }
 }
 
+function Format-RichStatus {
+    param($Status, [int]$Width = 96, [switch]$UseColor)
+    # Style after wrapping: escape sequences must not count towards visible width.
+    $reset = ''; $dim = ''; $bold = ''; $cyan = ''; $green = ''; $yellow = ''
+    if ($UseColor) {
+        $reset="`e[0m"; $dim="`e[90m"; $bold="`e[1m"
+        $cyan="`e[36m"; $green="`e[32m"; $yellow="`e[33m"
+    }
+    ''
+    "${cyan}${bold}  ◇ ghprofile${reset}  ${dim}v$($Status.Version)${reset}"
+    $attention = if ($Status.Issues.Count -eq 1) { '1 item needs attention' } else { "$($Status.Issues.Count) items need attention" }
+    $health = if ($Status.Healthy) { "${green}✓ Checks passed${reset}" } else { "${yellow}! $attention${reset}" }
+    "  $health"
+    "${dim}  $('─' * [Math]::Max(1, $Width - 4))${reset}"
+    $section = ''
+    foreach ($line in @(Format-Status $Status -Width ($Width - 2))) {
+        if (-not $line) { continue }
+        if ($line -match '^(Directory|Profile|Author|Committer|Signing|Push remote|HTTPS user|Transport|GitHub CLI|Warning)\s+: (.*)$') {
+            $label = $Matches[1].Trim(); $value = $Matches[2]
+            $nextSection = switch ($label) {
+                { $_ -in @('Directory','Profile','Author','Committer','Signing') } { 'IDENTITY'; break }
+                { $_ -in @('Push remote','HTTPS user','Transport') } { 'GIT REMOTES'; break }
+                'GitHub CLI' { 'GITHUB CLI'; break }
+                'Warning' { 'ATTENTION'; break }
+            }
+            if ($nextSection -ne $section) {
+                ''
+                $section = $nextSection
+                $accent = if ($section -eq 'ATTENTION') { $yellow } else { $cyan }
+                "  ${accent}${bold}$section${reset}"
+            }
+            $icon = switch ($label) {
+                'Directory' { '›' }
+                'Profile' { '◆' }
+                'Author' { '○' }
+                'Committer' { '○' }
+                'Signing' { '◇' }
+                'Push remote' { '↗' }
+                'HTTPS user' { '○' }
+                'Transport' { '↔' }
+                'GitHub CLI' { '○' }
+                'Warning' { '!' }
+            }
+            $accent = if ($label -eq 'Warning') { $yellow } elseif ($label -eq 'Profile') { $cyan } elseif ($label -eq 'GitHub CLI' -and $value -match '\(authenticated\)$') { $green } else { '' }
+            # Keep the same 15-column prefix as the plain formatter, plus 2 margins.
+            $labelText = '{0,-12}' -f $label
+            "  ${accent}$icon${reset} ${dim}${labelText}${reset} ${accent}${value}${reset}"
+        } else {
+            $accent = if ($section -eq 'ATTENTION') { $yellow } else { '' }
+            "  ${accent}$line${reset}"
+        }
+    }
+    ''
+}
+
 try {
     if ($Command -notin @('setup','status','doctor','switch','init-key')) { throw 'Usage: ghprofile.ps1 setup|status|doctor|switch <profile>|init-key <profile>|--version [-ConfigPath path] [-Json] [-NonInteractive] [-WhatIf]' }
     if ($Name -and $Command -notin @('switch','init-key')) { throw 'A profile argument is only valid for switch and init-key.' }
@@ -452,7 +509,15 @@ try {
             else {
                 $width = 96
                 try { if ($Host.UI.RawUI.WindowSize.Width -gt 20) { $width = [Math]::Min(96, $Host.UI.RawUI.WindowSize.Width - 1) } } catch { }
-                Format-Status $result -Width $width
+                $interactive = -not [Console]::IsOutputRedirected -and $Host.UI.SupportsVirtualTerminal -and $MyInvocation.PipelinePosition -eq $MyInvocation.PipelineLength
+                $autoColor = $interactive -and $env:TERM -ne 'dumb' -and $null -eq [Environment]::GetEnvironmentVariable('NO_COLOR') -and $PSStyle.OutputRendering -ne 'PlainText'
+                $useColor = $Color -eq 'Always' -or ($Color -eq 'Auto' -and $autoColor)
+                if (-not $Plain -and ($interactive -or $Color -eq 'Always')) {
+                    # Terminal UI bypasses PowerShell's host formatter, which strips
+                    # ANSI under TERM=dumb even after OutputRendering is changed.
+                    # Plain/JSON remain ordinary pipeline output for automation.
+                    Format-RichStatus $result -Width $width -UseColor:$useColor | ForEach-Object { [Console]::WriteLine($_) }
+                } else { Format-Status $result -Width $width }
                 foreach ($entry in $result.Settings.GetEnumerator()) {
                     if ($entry.Value -isnot [string]) { Write-Verbose "$($entry.Key): $($entry.Value.Value); origin: $($entry.Value.Origin)" }
                 }

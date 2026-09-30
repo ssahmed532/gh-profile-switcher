@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0] - 2026-09-30
+
+- Add a rich interactive status/doctor display with colored headings, authentication states, Unicode symbols and grouped identity, remote, CLI and warning sections.
+- Add `-Plain` and `-Color Auto|Always|Never`; automatically use plain output when redirected or piped, and honor NO_COLOR, TERM=dumb and PowerShell's PlainText rendering preference in automatic color mode.
+- Preserve JSON output, diagnostics, wrapped values and verbose configuration origins.
+- Add focused rendering tests at 40, 60, 80 and 96 columns and a synthetic preview command.
+
 ## [0.1.1] - 2026-09-30
 
 - Replace JSON fragments in default status/doctor output with aligned, width-aware console summaries and wrapped warnings.
