@@ -25,7 +25,12 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 function Invoke-Native {
-    param([string]$Exe, [string[]]$Arguments, [int[]]$Allowed = @(0), [switch]$Interactive)
+    param([string]$Exe, [string[]]$Arguments, [int[]]$Allowed = @(0), [switch]$Interactive, [switch]$CaptureOutput)
+    # OpenSSH may write prompts straight to the console, bypassing its streams.
+    # Prevent untrusted argument text from reaching that unsanitizable channel.
+    if ($Interactive -and @($Arguments | Where-Object { $_ -match '[\p{Cc}\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]' }).Count) {
+        throw 'Interactive native arguments cannot contain terminal control characters.'
+    }
     $app = Get-Command $Exe -CommandType Application -ErrorAction Stop | Select-Object -First 1
     $info = [Diagnostics.ProcessStartInfo]::new($app.Source)
     $info.UseShellExecute = $false
@@ -37,30 +42,123 @@ function Invoke-Native {
     if (-not $Interactive) { $info.Environment['SSH_ASKPASS_REQUIRE'] = 'never' }
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $info
+    $started = $false
     try {
         [void]$process.Start()
+        $started = $true
         if (-not $Interactive) { $process.StandardInput.Close() }
-        $stdout = $process.StandardOutput.ReadToEndAsync()
-        $stderr = $process.StandardError.ReadToEndAsync()
-        if ($Interactive) { $process.WaitForExit() }
-        elseif (-not $process.WaitForExit(30000)) { $process.Kill($true); throw "$Exe timed out after 30 seconds." }
-        $result = [pscustomobject]@{ Code = $process.ExitCode; Out = $stdout.GetAwaiter().GetResult().TrimEnd("`r", "`n"); Error = $stderr.GetAwaiter().GetResult().Trim() }
+        if ($Interactive) {
+            # Drain both streams while the child is waiting, including prompts
+            # without a newline. Only key derivation captures stdout as data.
+            $streams = @(
+                @{ Reader=$process.StandardOutput; Chars=[char[]]::new(512); Text=[Text.StringBuilder]::new(); Pending=''; Error=$false; Display=(-not $CaptureOutput) },
+                @{ Reader=$process.StandardError; Chars=[char[]]::new(512); Text=[Text.StringBuilder]::new(); Pending=''; Error=$true; Display=$true }
+            )
+            foreach ($stream in $streams) { $stream.Task = $stream.Reader.ReadAsync($stream.Chars, 0, $stream.Chars.Length) }
+            while (@($streams | Where-Object { $null -ne $_.Task }).Count) {
+                foreach ($stream in $streams) {
+                    if ($null -eq $stream.Task -or -not $stream.Task.IsCompleted) { continue }
+                    $count = $stream.Task.GetAwaiter().GetResult()
+                    if ($count) {
+                        $chunk = [string]::new($stream.Chars, 0, $count)
+                        [void]$stream.Text.Append($chunk)
+                        if ($stream.Display) { $stream.Pending += $chunk; Write-NativePendingText $stream }
+                        $stream.Task = $stream.Reader.ReadAsync($stream.Chars, 0, $stream.Chars.Length)
+                    } else {
+                        if ($stream.Display) { Write-NativePendingText $stream -Final }
+                        $stream.Task = $null
+                    }
+                }
+                # A short managed wait lets PowerShell service pipeline cancellation.
+                Start-Sleep -Milliseconds 20
+            }
+            while (-not $process.WaitForExit(50)) { }
+            $output = if ($CaptureOutput) { $streams[0].Text.ToString() } else { '' }
+            $errorText = $streams[1].Text.ToString()
+        } else {
+            $stdout = $process.StandardOutput.ReadToEndAsync()
+            $stderr = $process.StandardError.ReadToEndAsync()
+            if (-not $process.WaitForExit(30000)) { throw "$Exe timed out after 30 seconds." }
+            $output = $stdout.GetAwaiter().GetResult()
+            $errorText = $stderr.GetAwaiter().GetResult()
+        }
+        $result = [pscustomobject]@{ Code = $process.ExitCode; Out = $output.TrimEnd("`r", "`n"); Error = $errorText.Trim() }
         if ($result.Code -notin $Allowed) {
             $detail = Protect-Text $result.Error
             throw "$Exe failed (exit $($result.Code)): $detail"
         }
         return $result
-    } finally { $process.Dispose() }
+    } finally {
+        # Dispose alone does not terminate a child. Release it before callers
+        # release their owned locks, including when the pipeline is stopped.
+        try { if ($started -and -not $process.HasExited) { $process.Kill($true); $process.WaitForExit() } }
+        finally { $process.Dispose() }
+    }
 }
 
-function Protect-Text([string]$Text) {
+function Write-NativePendingText {
+    param([hashtable]$Stream, [switch]$Final)
+    $text = $Stream.Pending
+    $cut = $text.Length
+    if (-not $Final) {
+        # Retain incomplete credentials across read boundaries. Ordinary prompt
+        # text can be displayed immediately without waiting for a newline.
+        foreach ($pattern in @('(?i)https?://[^\s]*$', '(?i)(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]*$')) {
+            $match = [regex]::Match($text, $pattern)
+            if ($match.Success) { $cut = [Math]::Min($cut, $match.Index) }
+        }
+        $markers = @('http://','https://','ghp_','gho_','ghu_','ghs_','ghr_','github_pat_')
+        foreach ($key in @('GH_TOKEN','GITHUB_TOKEN','GH_ENTERPRISE_TOKEN','GITHUB_ENTERPRISE_TOKEN')) {
+            $secret = [Environment]::GetEnvironmentVariable($key)
+            if ($secret) { $markers += $secret }
+        }
+        foreach ($marker in $markers) {
+            for ($length = 1; $length -lt $marker.Length -and $length -le $text.Length; $length++) {
+                if ($text.EndsWith($marker.Substring(0,$length), [StringComparison]::OrdinalIgnoreCase)) { $cut = [Math]::Min($cut, $text.Length - $length) }
+            }
+        }
+        if ($text.Length -and [char]::IsHighSurrogate($text[$text.Length - 1])) { $cut = [Math]::Min($cut, $text.Length - 1) }
+        if ($text.EndsWith("`r")) { $cut = [Math]::Min($cut, $text.Length - 1) }
+        # Do not split a complete secret because its tail happens to also be
+        # the prefix of another marker (or of the same secret).
+        $patterns = @('(?i)https?://[^/\s@]+@', '(?i)\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)\b')
+        foreach ($key in @('GH_TOKEN','GITHUB_TOKEN','GH_ENTERPRISE_TOKEN','GITHUB_ENTERPRISE_TOKEN')) {
+            $secret = [Environment]::GetEnvironmentVariable($key)
+            if ($secret) { $patterns += [regex]::Escape($secret) }
+        }
+        do {
+            $previousCut = $cut
+            foreach ($pattern in $patterns) {
+                foreach ($match in [regex]::Matches($text, $pattern)) {
+                    if ($match.Index -lt $cut -and $match.Index + $match.Length -gt $cut) { $cut = $match.Index }
+                }
+            }
+        } while ($cut -ne $previousCut)
+    }
+    if ($cut) {
+        $safe = Protect-Text $text.Substring(0,$cut) -PreserveNewlines
+        if ($Stream.Error) { [Console]::Error.Write($safe) } else { [Console]::Write($safe) }
+    }
+    $Stream.Pending = $text.Substring($cut)
+}
+
+function Protect-Text([string]$Text, [switch]$PreserveNewlines) {
     $Text = $Text -replace '(?i)(https?://)[^/\s@]+@', '$1<redacted>@'
     $Text = $Text -replace '(?i)\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)\b', '<redacted>'
     foreach ($key in @('GH_TOKEN','GITHUB_TOKEN','GH_ENTERPRISE_TOKEN','GITHUB_ENTERPRISE_TOKEN')) {
         $secret = [Environment]::GetEnvironmentVariable($key)
         if ($secret) { $Text = $Text.Replace($secret, '<redacted>') }
     }
-    return $Text
+    if ($PreserveNewlines) { $Text = $Text.Replace("`r`n", "`n") }
+    # Escape every C0/C1 control (including ESC, BEL, CR and backspace),
+    # directional overrides/isolates and Unicode line separators. Escaping the
+    # introducers also neutralizes CSI/OSC/DCS, even incomplete sequences.
+    # Keep ordinary Unicode, combining accents and emoji joiners intact.
+    return [regex]::Replace($Text, '[\p{Cc}\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]', {
+        param($match)
+        if ($PreserveNewlines -and $match.Value -eq "`n") { return "`n" }
+        '\u{0:X4}' -f [int][char]$match.Value
+    })
 }
 
 function Resolve-ProfilePath([string]$Value) {
@@ -159,7 +257,7 @@ function Test-SigningKey($Profile) {
         if (-not (Test-Path -LiteralPath $private -PathType Leaf)) { throw "Profile '$($Profile.Id)': adjacent private key is missing; use agent mode if appropriate." }
         $arguments = @('-y','-f',$private)
         if ($NonInteractive) { $arguments += @('-P','') }
-        $derived = (Invoke-Native ssh-keygen $arguments -Interactive:(-not $NonInteractive)).Out
+        $derived = (Invoke-Native ssh-keygen $arguments -Interactive:(-not $NonInteractive) -CaptureOutput).Out
         if ((Get-PublicIdentity $derived) -cne $public) { throw "Profile '$($Profile.Id)': public and private keys do not match." }
     }
     return $public
@@ -169,7 +267,7 @@ function New-ProfileKey($Profile) {
     if ($Profile.Mode -eq 'none') { throw 'This profile has signing disabled.' }
     $private = $Profile.Key.Substring(0, $Profile.Key.Length - 4)
     if ((Test-Path -LiteralPath $private) -or (Test-Path -LiteralPath $Profile.Key)) { throw 'Refusing to replace either member of an existing key pair.' }
-    if ($PSCmdlet.ShouldProcess($private, 'Create an Ed25519 signing key pair (passphrase prompted)')) {
+    if ($PSCmdlet.ShouldProcess((Protect-Text $private), 'Create an Ed25519 signing key pair (passphrase prompted)')) {
         if ($NonInteractive) { throw 'init-key requires an interactive passphrase prompt. Provision keys externally for automation.' }
         [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($private))
         $keyLock = [IO.File]::Open("$private.ghprofile-lock", 'CreateNew', 'Write', 'None')
@@ -177,7 +275,7 @@ function New-ProfileKey($Profile) {
             if ((Test-Path -LiteralPath $private) -or (Test-Path -LiteralPath $Profile.Key)) { throw 'A key pair appeared while acquiring the lock.' }
             [void](Invoke-Native ssh-keygen @('-t','ed25519','-C',$Profile.Email,'-f',$private) -Interactive)
         } finally { $keyLock.Dispose(); [IO.File]::Delete("$private.ghprofile-lock") }
-        Write-Output "Created signing key: $($Profile.Key)"
+        Write-Output (Protect-Text "Created signing key: $($Profile.Key)")
     }
 }
 
@@ -190,7 +288,7 @@ function Install-Profiles($Configuration) {
         Write-SetupEvent '' 'Profile' "$($p.Id) -> $roots; signing: $($p.Mode)"
     }
     if ($WhatIfPreference) { Write-SetupEvent 'PREVIEW' 'No changes' 'Profile data validated. Key validation and configuration activation will run when applying setup.' 'warning' }
-    if (-not $PSCmdlet.ShouldProcess($global, 'Validate keys and atomically activate managed Git profiles')) { return }
+    if (-not $PSCmdlet.ShouldProcess((Protect-Text $global), 'Validate keys and atomically activate managed Git profiles')) { return }
     Write-SetupEvent 'VALIDATION' 'Checking' 'Validating signing keys before changing configuration. Encrypted file keys may prompt for a passphrase.'
     $publicKeys = @{}
     foreach ($p in $Configuration.Profiles.Values) {
@@ -389,6 +487,8 @@ function Get-Status($Configuration, [switch]$Doctor) {
 
 function Format-StatusLine {
     param([string]$Label, [string]$Value, [int]$Width = 96)
+    $Label = Protect-Text $Label
+    $Value = Protect-Text $Value
     $prefix = '{0,-12} : ' -f $Label
     $indent = ' ' * $prefix.Length
     $remaining = ($Value -replace '[\r\n\t]+', ' ').Trim()
@@ -461,6 +561,7 @@ function Write-ConsoleLines([string[]]$Lines, [switch]$ToError) {
 
 function Format-SetupEvent {
     param([string]$Section, [string]$Label, [string]$Value, [string]$Tone='normal', [int]$Width=96, [switch]$Rich, [switch]$UseColor)
+    $Section = Protect-Text $Section
     $reset=''; $accent=''; $dim=''; $bold=''
     if ($Rich -and $UseColor) {
         $reset="`e[0m"; $dim="`e[90m"; $bold="`e[1m"
@@ -494,7 +595,7 @@ function Format-RichStatus {
         $cyan="`e[36m"; $green="`e[32m"; $yellow="`e[33m"
     }
     ''
-    "${cyan}${bold}  ◇ ghprofile${reset}  ${dim}v$($Status.Version)${reset}"
+    "${cyan}${bold}  ◇ ghprofile${reset}  ${dim}v$(Protect-Text $Status.Version)${reset}"
     $attention = if ($Status.Issues.Count -eq 1) { '1 item needs attention' } else { "$($Status.Issues.Count) items need attention" }
     $health = if ($Status.Healthy) { "${green}✓ Checks passed${reset}" } else { "${yellow}! $attention${reset}" }
     "  $health"
@@ -562,7 +663,7 @@ try {
                 [void](Invoke-Native gh @('auth','switch','--hostname',$profile.Host,'--user',$profile.User))
                 $state = Get-GhState $profile.Host
                 if (-not $state.Healthy -or $state.Login -ne $profile.User) { throw "Switch completed but account verification failed. $($state.Error)" }
-                Write-Output "GitHub CLI active account: $($state.Login)@$($profile.Host). This selection is shared across terminals."
+                Write-Output (Protect-Text "GitHub CLI active account: $($state.Login)@$($profile.Host). This selection is shared across terminals.")
             }
         }
         default {
@@ -577,9 +678,9 @@ try {
                     Write-ConsoleLines @(Format-RichStatus $result -Width $width -UseColor:$presentation.UseColor)
                 } else { Format-Status $result -Width $width }
                 foreach ($entry in $result.Settings.GetEnumerator()) {
-                    if ($entry.Value -isnot [string]) { Write-Verbose "$($entry.Key): $($entry.Value.Value); origin: $($entry.Value.Origin)" }
+                    if ($entry.Value -isnot [string]) { Write-Verbose (Protect-Text "$($entry.Key): $($entry.Value.Value); origin: $($entry.Value.Origin)") }
                 }
-                foreach ($remote in $result.PushDestinations) { Write-Verbose "Credential helper for $($remote.Remote): $($remote.CredentialHelper)" }
+                foreach ($remote in $result.PushDestinations) { Write-Verbose (Protect-Text "Credential helper for $($remote.Remote): $($remote.CredentialHelper)") }
             }
             if ($Command -eq 'doctor' -and -not $result.Healthy) { exit 2 }
         }

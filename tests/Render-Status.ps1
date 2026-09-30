@@ -6,7 +6,7 @@ $source = Join-Path (Split-Path $PSScriptRoot) 'ghprofile.ps1'
 $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
-foreach ($fn in $ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -like 'Format-*'},$false)) {
+foreach ($fn in $ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and ($n.Name -like 'Format-*' -or $n.Name -eq 'Protect-Text')},$false)) {
     . ([scriptblock]::Create($fn.Extent.Text))
 }
 $fixture = [pscustomobject]@{
@@ -54,6 +54,25 @@ $setupError=(Format-SetupEvent 'SETUP FAILED' 'Error' 'Key validation failed.' '
 Assert ($setupError -match '\x1b\[31m' -and $setupError -notmatch 'COMPLETE') 'Setup errors are red and never claim completion'
 $setupPlain=(Format-SetupEvent 'PREVIEW' 'No changes' 'Validation will run when applying setup.' 'warning') -join "`n"
 Assert ($setupPlain -notmatch '\x1b' -and $setupPlain -match 'No changes') 'Plain setup preview has no ANSI escapes'
+if (-not $Preview) {
+    $attack = "name`e[0m`e[2J`e[H`e]8;;https://example.invalid`aLINK`e]8;;`e\" + [char]0x9b + '2J' + [char]0x202e + "`r`b`0"
+    $fixture.InRepository=$true
+    $fixture.Version=$attack; $fixture.Directory=$attack; $fixture.EffectiveProfile=$attack
+    $fixture.Settings=@{author=$attack;committer=$attack;'commit.gpgsign'=@{Value='true'};'user.signingkey'=@{Value=$attack};'gpg.format'=@{Value=$attack}}
+    $fixture.PushDestinations=@([pscustomobject]@{Remote=$attack;PushUrl=$attack;Transport='https';ConfiguredHttpsUsername=$attack})
+    $fixture.GitHubCli=@([pscustomobject]@{Login=$attack;Host=$attack;Healthy=$true})
+    $fixture.Issues=@($attack)
+    foreach ($mode in @('plain','rich','color')) {
+        $lines = if ($mode -eq 'plain') { @(Format-Status $fixture) } else { @(Format-RichStatus $fixture -UseColor:($mode -eq 'color')) }
+        $clean = ($lines | ForEach-Object { Strip $_ }) -join ''
+        Assert ($clean -notmatch '[\p{Cc}\u202e]') "$mode neutralizes controls across all status fields"
+        Assert ($clean -match '\\u001B') "$mode visibly escapes injected terminal sequences"
+    }
+    $safeSetup = (Format-SetupEvent $attack $attack $attack -Rich -UseColor | ForEach-Object { Strip $_ }) -join ''
+    Assert ($safeSetup -notmatch '[\p{Cc}\u202e]') 'Setup sanitizes section, label and value before styling'
+    Assert ((Protect-Text "日本語 café é 👩‍💻") -ceq "日本語 café é 👩‍💻") 'Ordinary Unicode, combining characters and emoji remain intact'
+    Assert ((Protect-Text ($attack + ' https://user:secret@example.invalid ghp_fixturesecret')) -notmatch 'user:secret|ghp_fixturesecret') 'Control escaping preserves credential redaction'
+}
 if ($Preview) {
     $rich | ForEach-Object { [Console]::WriteLine($_) }
     $fixture.InRepository=$true

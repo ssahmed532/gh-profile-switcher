@@ -44,7 +44,8 @@ Planned versions below are targets. Reconcile them with the actual branch versio
 - [ ] **P1.1 Reproduce and fix interactive native execution.** Inspect `Invoke-Native`, `Test-SigningKey`, and `New-ProfileKey`. Interactive execution currently captures stdout/stderr and waits for completion; prompts written to those streams can be hidden. Determine actual Windows OpenSSH behavior with disposable encrypted keys before choosing a fix. Separate captured machine-readable execution from interactive prompting without mixing prompt text into returned public-key data.
   - Acceptance: key creation and encrypted-key validation expose prompts while waiting; passphrases are never logged or passed on a command line; noninteractive validation fails promptly without prompting; cancellation returns control and releases owned locks; native failures preserve configuration and existing keys.
   - Verification: deterministic child-process prompt/cancellation tests plus a documented manual Windows terminal check using disposable keys. If interactive automation cannot establish visibility, retain the manual check as explicitly pending.
-- [ ] **P1.2 Sanitize untrusted terminal values.** Inspect `Protect-Text`, all formatters, native errors, verbose output, and setup events. Remove or visibly escape terminal control sequences from external values before applying trusted styling. Cover escape/CSI/OSC sequences and other display-manipulating controls without damaging ordinary Unicode.
+  - 2026-09-30 progress: stream-prompt defect reproduced against baseline `db1911f`; live stream draining, separate public-key capture, child termination and owned-key-lock cancellation tests implemented. Manual Windows terminal prompt/hidden-input/Ctrl+C check remains pending; follow the isolated checklist in `docs/HOWTO.html` before checking off P1.1.
+- [x] **P1.2 Sanitize untrusted terminal values.** Inspect `Protect-Text`, all formatters, native errors, verbose output, and setup events. Remove or visibly escape terminal control sequences from external values before applying trusted styling. Cover escape/CSI/OSC sequences and other display-manipulating controls without damaging ordinary Unicode.
   - Acceptance: malicious profile text, Git identity, remote URLs, paths, and native error text cannot inject color resets, screen clearing, cursor movement, or terminal hyperlinks. Existing secret redaction still applies. Intentional layout and application-generated styling remain functional.
   - Verification: synthetic control-sequence fixtures across rich, plain, verbose, and error paths; JSON remains valid data and contains no application-generated styling. Do not execute injected control sequences in a real terminal during tests.
 - [ ] **P1.3 Complete patch release verification and documentation.** Keep interface changes out of this patch. Record any unreproduced hypothesis accurately.
@@ -105,6 +106,7 @@ Run focused checks while developing, then the existing suites when implementatio
 
 ```powershell
 pwsh -NoProfile -File tests/Render-Status.ps1
+pwsh -NoProfile -File tests/Native-Execution.ps1
 pwsh -NoProfile -File tests/Run-Tests.ps1
 pwsh -NoProfile -File ghprofile.ps1 --version
 git diff --check
@@ -118,9 +120,26 @@ git diff --check
 
 ## Session handoff
 
-- **State:** Roadmap recorded; implementation of these phases has not started.
-- **Baseline:** v0.3.0. No behavior changes in this planning task.
-- **Next task:** P1.1 — reproduce prompt visibility and cancellation behavior with disposable encrypted keys; inspect `Invoke-Native`, `Test-SigningKey`, and `New-ProfileKey`.
-- **Known uncertainty:** Hidden interactive prompts are a code-review hypothesis, not a reproduced defect. Confirm before modifying the execution path.
-- **Verification for this document:** Documentation review only; implementation tests are not required for the roadmap itself.
+- **State:** Phase 1 implementation and automated regression checks complete; P1.2 checked off. P1.1 remains open for real Windows terminal verification; P1.3 remains open for patch-version synchronization after that check.
+- **Baseline:** Executable remains v0.3.0. Changes are explicitly documented as unreleased, planned v0.3.1, following the no-version-bump-for-unfinished-functionality rule above.
+- **Next task:** Run the isolated manual Windows checklist in `docs/HOWTO.html` (Tests and versioning), record terminal/OpenSSH versions and results, and resolve any prompt/cancellation failures. Then finish P1.1/P1.3 and synchronize script, README, HOWTO, CHANGELOG, CLAUDE and version assertions to v0.3.1. Do not begin Phase 2 first.
+- **Known uncertainty:** A deterministic child reproduces hidden stream-written prompts in baseline commit `db1911f`. Windows OpenSSH's encrypted-key probe waited for input with empty captured stdout/stderr; this does not prove that its direct console prompt was invisible. Real terminal visibility, hidden passphrase input and Ctrl+C remain unverified.
+- **Verification:** 113 integration checks, 29 rendering checks and 20 native-execution checks passed on PowerShell 7.6.6 / Windows OpenSSH file version 9.5.6.2. Version-only output is v0.3.0; whitespace check passed. PowerShell 7.2 compatibility was not run.
+- **Publication scope:** User explicitly authorized committing and pushing all current changes to `main` on 2026-09-30. This is an unreleased development checkpoint, not completion of Phase 1. Tags, releases and external guide publication remain outside this request; the local guide is authoritative for these changes.
 - **Future session log format:** Date; task IDs; changes; verification command/result; decisions; blockers or limitations; exact next step. Append concise entries below and keep the current state above accurate.
+
+### 2026-09-30 — P1.1/P1.2 implementation; P1.3 preparation
+
+- Changed `ghprofile.ps1`: asynchronously drain interactive streams while waiting; use explicit stdout capture for key derivation; kill the owned process tree in `finally` before callers release locks. Noninteractive execution retains its 30-second limit and empty-passphrase validation. No new CLI flags or commands.
+- Terminal protection visibly escapes C0/C1 controls, directional controls and Unicode line separators before trusted styling. Applied to status rows, setup headings/values, verbose details, native errors, success messages and ShouldProcess paths. Streaming output retains ordinary line breaks and buffers incomplete credential patterns for redaction. Interactive arguments with terminal controls are refused because direct OpenSSH console writes cannot be sanitized after emission. JSON retains raw identity fields as data; downstream consumers must sanitize their own displays.
+- Added `tests/Native-Execution.ps1`; extended `tests/Render-Status.ps1` and `tests/Run-Tests.ps1`. Native tests check prompts before releasing child-process handshakes, separate captured key data, failure propagation, pipeline cancellation/lock release, argument protection and every split point of a credential/control/Unicode/CRLF fixture.
+- Evidence: `tests/Native-Execution.ps1 -Source <temporary HEAD script>` fails at the first live stderr-prompt assertion, while the working-tree version passes. The disposable Windows OpenSSH encrypted-key probe waited past three seconds with empty captured streams and was terminated. Automated integration verifies encrypted `-NonInteractive` failure without activation, preserved existing keys/configuration, and released owned configuration locks after injected failures.
+- Verification: `pwsh -NoProfile -File tests/Run-Tests.ps1` passed 113 checks after an approved outside-sandbox run (sandbox denied atomic replacement of temporary config). The first outside-sandbox attempt caught an overly strict JSON test that treated raw directional characters in data as terminal presentation; corrected the test and reran successfully. `tests/Render-Status.ps1` passed 29 checks; `tests/Native-Execution.ps1` passed 20 checks. Both focused suites were rerun after the final native newline-preservation adjustment. `ghprofile.ps1 --version` printed only v0.3.0; `git diff --check` passed.
+- Updated README, local HOWTO and CHANGELOG with unreleased behavior and an isolated manual terminal checklist. Preserved the pre-existing README roadmap link. No real profiles were read, no real machine configuration was applied, and no publication was attempted.
+- Remaining: perform the documented manual terminal check, then complete patch version synchronization and final P1.3 checks. Guide republishing remains a separate authorized action.
+
+### 2026-09-30 — Manual-check handoff and authorized main-branch checkpoint
+
+- Clarified the remaining manual check: visible key-creation and encrypted-key-validation prompts, hidden passphrase input, Ctrl+C returning control and releasing owned locks, unchanged configuration/key hashes after cancellation, and prompt-free noninteractive failure. The disposable preparation and commands are in `docs/HOWTO.html`, under Tests and versioning.
+- Updated `AGENTS.md` so future sessions distinguish automated stream tests from actual Windows console evidence and keep P1.1/P1.3 open until verified. Commit/push authorization does not imply phase completion or permission to modify real configuration.
+- User requested all current changes be committed and pushed to `main`; retain v0.3.0 and the unreleased changelog entry. Prior automated results remain 113 integration, 29 rendering and 20 native checks; this follow-up changes guidance only. The next implementation task remains the manual Windows check, followed by v0.3.1 release verification.

@@ -184,7 +184,7 @@ try {
     $source=[IO.File]::ReadAllText($scriptFile).Replace('function Invoke-Native {','function Invoke-OriginalNative {')
     $wrapper=@'
 function Invoke-Native {
-    param([string]$Exe,[string[]]$Arguments,[int[]]$Allowed=@(0),[switch]$Interactive)
+    param([string]$Exe,[string[]]$Arguments,[int[]]$Allowed=@(0),[switch]$Interactive,[switch]$CaptureOutput)
     if ($Exe -eq 'git' -and ($Arguments -join ' ') -match 'personal.gitconfig user.email') { throw 'Injected native write failure' }
     Invoke-OriginalNative @PSBoundParameters
 }
@@ -220,6 +220,28 @@ function Protect-Text
     Assert ($r.Out -notmatch '\x1b|◇ ghprofile' -and $r.Out -match 'Directory\s+:') 'Plain overrides forced color'
     $r=Script @('status','-ConfigPath',$testConfig) $moved
     Assert ($r.Code -eq 0 -and $r.Out -notmatch '\x1b|◇ ghprofile') 'Automatic redirected output remains plain'
+    $malicious = "Example`e[2J`e]8;;https://example.invalid`aLink`e]8;;`a" + [char]0x202e
+    Good (Run git @('config','user.name',$malicious) $moved) 'Install synthetic terminal-control identity'
+    Good (Run git @('config','credential.helper',"helper`e[2J ghp_fixturesecret") $moved) 'Install synthetic terminal-control helper'
+    foreach ($mode in @('plain','rich','json')) {
+        $flags = switch ($mode) { plain { @('-Plain','-Verbose') } rich { @('-Color','Always','-Verbose') } json { @('-Json') } }
+        $r=Script (@('status','-ConfigPath',$testConfig) + $flags) $moved
+        Good $r "$mode status with malicious external values"
+        if ($mode -eq 'json') {
+            $parsed=$r.Out | ConvertFrom-Json
+            Assert ($parsed.InRepository -and $r.Out -notmatch '\x1b|ghp_fixturesecret') 'Malicious-value JSON remains valid redacted data without application styling'
+            Assert ($parsed.Settings.'user.name'.Value -ceq $malicious) 'JSON retains raw identity data for downstream consumers'
+        } else {
+            Assert ($r.Out -notmatch '\x1b\[2J|\x1b\]8|\x07|\u202e|ghp_fixturesecret') "$mode external values cannot inject terminal controls or expose helper tokens"
+            Assert ($r.Out -match '\\u001B') "$mode shows escaped external controls"
+        }
+    }
+    Good (Run git @('config','--unset','user.name') $moved) 'Remove synthetic identity override'
+    Good (Run git @('config','--unset','credential.helper') $moved) 'Remove synthetic helper override'
+    $config.profiles.personal['bad' + [char]27 + '[2J']='invalid'; SaveConfig
+    $r=Script @('setup','-ConfigPath',$testConfig,'-Plain')
+    Assert ($r.Code -eq 1 -and $r.Error -notmatch '\x1b' -and $r.Error -match '\\u001B') 'Setup validation errors escape malicious profile field names'
+    $config.profiles.personal.Remove('bad' + [char]27 + '[2J'); SaveConfig
     $r=Script @('doctor','-ConfigPath',$testConfig,'-Json','-NonInteractive') $moved
     Assert ($r.Code -eq 2 -and ($r.Out | ConvertFrom-Json).Healthy -eq $false) 'Doctor returns exit 2 for diagnostic findings'
     Good (Run git @('remote','set-url','origin','git@github.com:example/repo.git') $moved) 'Use SSH remote'

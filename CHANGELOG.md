@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Phase 1 / planned 0.3.1
+
+- Display native stdout/stderr prompts while interactive processes wait; capture public-key derivation stdout separately.
+- Terminate owned native children on pipeline cancellation before releasing key locks.
+- Escape terminal controls and directional overrides in external values before styling, including verbose, setup, error and streamed native output; preserve credential redaction across stream boundaries.
+- Refuse control characters in interactive native arguments because OpenSSH can write directly to the console.
+- Add deterministic prompt, cancellation, control-injection and streaming-redaction regression checks. Actual Windows terminal checks remain pending; executable and release version references remain at 0.3.0 until the phase is verified.
+
 ## [0.3.0] - 2026-09-30
 
 - Extend rich console presentation to setup: profile plans, signing-key checks, configuration progress, activation results, backups and next steps.

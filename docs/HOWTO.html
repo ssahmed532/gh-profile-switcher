@@ -5,6 +5,7 @@
 :root{color-scheme:light dark;font-family:system-ui,sans-serif;line-height:1.6}body{max-width:1050px;margin:auto;padding:2rem;color:light-dark(#18202c,#e5e9f0);background:light-dark(#f5f7fa,#11151c)}h1,h2{line-height:1.2}h2{margin-top:2.5rem}a{color:light-dark(#175bb0,#8cbeff)}pre{padding:1rem;overflow:auto;background:light-dark(#e8edf4,#202733);border-radius:8px}code{font-family:Consolas,monospace}table{border-collapse:collapse;width:100%}td,th{padding:.65rem;text-align:left;border-bottom:1px solid #87909c;vertical-align:top}.note{border-left:4px solid #aa7b24;padding:.8rem 1rem;background:light-dark(#fff3d5,#312816)}nav{display:flex;flex-wrap:wrap;gap:1rem}small{color:light-dark(#566073,#b3bdcc)}
 </style></head><body>
 <header><h1>GitHub Profile Switcher</h1><p>Folder-based Git identities, explicit GitHub CLI switching, and diagnostics that distinguish configuration from authentication.</p><small>Version v0.3.0 · Updated 2026-09-30 · PowerShell 7.2+</small></header>
+<p class="note">Unreleased working tree: Phase 1 fixes planned for v0.3.1. Automated checks cover stream-written prompts, cancellation and terminal controls. Manual Windows OpenSSH terminal verification is still pending; the executable version remains v0.3.0 until release verification is complete. This local guide has not been republished.</p>
 <nav aria-label="Contents"><a href="#setup">Setup</a><a href="#config">Configuration</a><a href="#daily">Daily use</a><a href="#keys">Signing keys</a><a href="#credentials">Credentials</a><a href="#recovery">Migration and recovery</a><a href="#limits">Limits</a><a href="#development">Development</a></nav>
 <section id="setup"><h2>1. Setup</h2>
 <p>Install PowerShell 7.2+, Git 2.34+, a GitHub CLI version supporting multi-account switching and JSON auth status, and an SSH-signing-capable OpenSSH installation. Signing profiles need <code>ssh-keygen</code>; agent mode also needs <code>ssh-add</code>. A credential helper such as Git Credential Manager is needed for convenient HTTPS authentication. Setup does not install software or change credential helpers.</p>
@@ -77,6 +78,8 @@ Copy-Item profiles.example.json profiles.json
 <section id="keys"><h2>4. Signing keys</h2>
 <p>In file mode, setup validates the public key and derives its public counterpart from the private key to ensure they match. The Git signing setting explicitly uses the private-key path. Encrypted keys may prompt for a passphrase. In agent mode, setup checks that the public key is loaded in ssh-agent and does not require an adjacent private-key file.</p>
 <p><code>init-key</code> is interactive, prompts for a passphrase, and refuses to run if either key file already exists. Keep private keys protected by your operating system's permissions and use a passphrase. For automation, provision keys separately or use an agent. <code>-NonInteractive</code> never prompts; encrypted file keys fail validation unless you switch to agent mode. It does not silently generate unencrypted keys.</p>
+<p>The Phase 1 working tree drains interactive stdout and stderr while the child waits, including prompts without newlines. During private-key validation, only stdout is captured as public-key data; stderr remains visible. Passphrases stay between the terminal and OpenSSH: the script does not read, log or put them in arguments. Ctrl+C pipeline cancellation terminates the owned child before releasing the key-creation lock. Interrupted key creation can leave a partial new pair; inspect it before retrying, since either existing file is protected from overwrite. Setup validates keys before acquiring its configuration lock or activating changes.</p>
+<p>External display values have C0/C1 controls, Unicode directional overrides and line separators visibly escaped (for example, <code>\u001B</code>) before application color is added. Ordinary Unicode, combining accents and emoji remain intact. Credential redaction also applies to verbose and streamed native output; incomplete credential-like text may be held until its boundary is known. Interactive native arguments containing display controls are refused because OpenSSH can bypass redirected streams and write directly to the console. JSON remains data without application styling; raw Git fields may contain JSON-escaped characters and should be treated as untrusted by downstream renderers.</p>
 <p>If only the public key is missing, recover it from the existing private key instead of generating a replacement:</p>
 <pre><code>ssh-keygen -y -f ~/.ssh/work-signing
 # Save the returned PUBLIC key to work-signing.pub after confirming the path.
@@ -106,6 +109,53 @@ gh ssh-key add "$HOME/.ssh/personal-signing.pub" --type signing --title "This co
 <pre><code>pwsh -NoProfile -File tests/Run-Tests.ps1</code></pre>
 <pre><code>pwsh -NoProfile -File tests/Render-Status.ps1
 pwsh -NoProfile -File tests/Render-Status.ps1 -Preview</code></pre>
+<pre><code>pwsh -NoProfile -File tests/Native-Execution.ps1</code></pre>
+<h3>Pending manual Windows terminal check for Phase 1</h3>
+<p>Use a new <code>pwsh -NoProfile</code> window, in this repository. Run the preparation below in that disposable shell; then run each numbered command separately. This uses synthetic profiles and temporary Git/gh state. Do not substitute real profiles or keys. Close the shell afterwards to discard its environment changes. Temporary files remain available for inspection.</p>
+<pre><code>$tool = (Resolve-Path ./ghprofile.ps1).Path
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('ghprofile-manual-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory $fixture | Out-Null
+Get-ChildItem Env:GIT_* | Remove-Item
+$env:GIT_CONFIG_GLOBAL = Join-Path $fixture 'global.config'
+$env:GIT_CONFIG_NOSYSTEM = '1'
+$env:GH_CONFIG_DIR = Join-Path $fixture 'gh'
+$definition = Join-Path $fixture 'profiles.json'
+@{ schemaVersion=1; policy='strict'; profiles=@{
+  sample=@{name='Terminal Example';email='terminal@example.invalid';ghUser='terminal-example';
+    root=(Join-Path $fixture 'repo');signingMode='file';signingKey=(Join-Path $fixture 'sample.pub')}
+  cancel=@{name='Cancel Example';email='cancel@example.invalid';ghUser='cancel-example';
+    root=(Join-Path $fixture 'cancel-repo');signingMode='file';signingKey=(Join-Path $fixture 'cancel.pub')}
+} } | ConvertTo-Json -Depth 5 | Set-Content $definition
+
+# 1. Both passphrase prompts must be visible while waiting. Enter a disposable
+# passphrase in the native prompt only; never put it in a shell command/log.
+pwsh -NoProfile -File $tool init-key sample -ConfigPath $definition
+
+# 2. Press Ctrl+C while waiting at the first passphrase prompt.
+pwsh -NoProfile -File $tool init-key cancel -ConfigPath $definition
+Test-Path (Join-Path $fixture 'cancel.ghprofile-lock') # must be False
+
+# Remove the unused profile from this disposable definition only.
+$data = Get-Content $definition -Raw | ConvertFrom-Json -AsHashtable
+$data.profiles.Remove('cancel')
+$data | ConvertTo-Json -Depth 5 | Set-Content $definition
+
+# 3. The encrypted-key validation prompt must be visible, with input hidden.
+pwsh -NoProfile -File $tool setup -ConfigPath $definition
+$before = (Get-FileHash $env:GIT_CONFIG_GLOBAL).Hash
+$keyBefore = (Get-FileHash (Join-Path $fixture 'sample')).Hash
+
+# 4. Press Ctrl+C at the validation prompt. Config and key must be unchanged.
+pwsh -NoProfile -File $tool setup -ConfigPath $definition
+(Get-FileHash $env:GIT_CONFIG_GLOBAL).Hash -eq $before # True
+(Get-FileHash (Join-Path $fixture 'sample')).Hash -eq $keyBefore # True
+Test-Path "$env:GIT_CONFIG_GLOBAL.lock" # False
+
+# 5. Must fail promptly (exit 1), without any passphrase prompt or writes.
+pwsh -NoProfile -File $tool setup -ConfigPath $definition -NonInteractive
+$LASTEXITCODE # 1
+(Get-FileHash $env:GIT_CONFIG_GLOBAL).Hash -eq $before # True</code></pre>
+<p>Record terminal host, PowerShell version, OpenSSH executable/version, prompt visibility, hidden input, cancellation behavior and the hash/lock results in TODO.md. Do not record passphrases or private-key contents. Automated stream tests cannot establish visibility of prompts OpenSSH writes directly to a Windows console. The headless Windows probe waited with empty captured streams; this is not proof that its console prompt was hidden.</p>
 <p>The dependency-free suite uses temporary repositories, isolated Git/gh configuration, disposable SSH keys and mocked authentication responses. It exercises signing/verification, setup reconciliation, strict mode, migration, worktrees, input serialization, failure isolation, agent mode and version output. It never switches real accounts or uploads keys. Temporary fixture paths are printed for inspection.</p>
 <p>The release version has a single source in <code>$ScriptVersion</code> in ghprofile.ps1. <code>--version</code> and <code>-Version</code> print only <code>v0.3.0</code> before config or dependency checks. The initial release was 0.1.0; 0.1.1 fixed console readability, 0.2.0 added rich status output, and 0.3.0 extends styling to setup under <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning 2.0.0</a>.</p>
 <p>The versioned interface consists of documented commands, parameters, profile schema, exit codes and JSON fields. In 0.x releases, compatible fixes increment PATCH and feature/breaking interface changes increment MINOR, with changes documented in CHANGELOG.md. Starting at 1.0.0, breaking changes increment MAJOR. Keep release documentation and version tests synchronized; schemaVersion changes independently when the configuration schema becomes incompatible.</p>
