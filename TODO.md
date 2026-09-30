@@ -116,16 +116,16 @@ git diff --check
 - Use temporary configurations, repositories, keys, helper stubs, and gh state. Native-call failures, timeouts, cancellation, lock handling, and no-write previews need appropriate coverage.
 - Do not rerun broad suites without a new change or unresolved concern. If a sandbox blocks a required test, use the established approval mechanism; never bypass it or report blocked tests as passing.
 - Review rich/plain/JSON output, exit codes, redaction, and documentation for every affected command. Interactive behavior needs terminal evidence in addition to captured-output tests.
-- Record actual test outcomes and limitations. No executable version bump for unfinished functionality; a completed release phase must synchronize version references and documentation before publication.
+- Record actual test outcomes and limitations. By explicit user direction on 2026-09-30, version the implemented Phase 1 fixes as v0.3.1 while manual Windows verification is deferred. Keep outstanding acceptance checks open; a version bump does not establish phase completion. Synchronize version references and documentation together.
 
 ## Session handoff
 
-- **State:** Phase 1 implementation and automated regression checks complete; P1.2 checked off. P1.1 remains open for real Windows terminal verification; P1.3 remains open for patch-version synchronization after that check.
-- **Baseline:** Executable remains v0.3.0. Changes are explicitly documented as unreleased, planned v0.3.1, following the no-version-bump-for-unfinished-functionality rule above.
-- **Next task:** Run the isolated manual Windows checklist in `docs/HOWTO.html` (Tests and versioning), record terminal/OpenSSH versions and results, and resolve any prompt/cancellation failures. Then finish P1.1/P1.3 and synchronize script, README, HOWTO, CHANGELOG, CLAUDE and version assertions to v0.3.1. Do not begin Phase 2 first.
+- **State:** Phase 1 fixes are versioned v0.3.1; P1.2 is complete. P1.1 remains open for real Windows terminal verification; P1.3 remains open until that evidence is recorded and assessed. Version references and documentation are synchronized.
+- **Current version:** v0.3.1, explicitly requested by the user for the implemented changes while deferring manual verification. Original roadmap baseline: v0.3.0.
+- **Next task:** User will perform the isolated manual Windows checklist in `docs/HOWTO.html` (Tests and versioning). Record terminal/OpenSSH versions and results, resolve any prompt/cancellation failures, then finish P1.1/P1.3. Do not begin Phase 2 first.
 - **Known uncertainty:** A deterministic child reproduces hidden stream-written prompts in baseline commit `db1911f`. Windows OpenSSH's encrypted-key probe waited for input with empty captured stdout/stderr; this does not prove that its direct console prompt was invisible. Real terminal visibility, hidden passphrase input and Ctrl+C remain unverified.
-- **Verification:** 113 integration checks, 29 rendering checks and 20 native-execution checks passed on PowerShell 7.6.6 / Windows OpenSSH file version 9.5.6.2. Version-only output is v0.3.0; whitespace check passed. PowerShell 7.2 compatibility was not run.
-- **Publication scope:** User explicitly authorized committing and pushing all current changes to `main` on 2026-09-30. This is an unreleased development checkpoint, not completion of Phase 1. Tags, releases and external guide publication remain outside this request; the local guide is authoritative for these changes.
+- **Verification:** Implementation checks passed: 113 integration, 29 rendering and 20 native-execution checks on PowerShell 7.6.6 / Windows OpenSSH file version 9.5.6.2. See the version-bump log below for current version checks. PowerShell 7.2 compatibility and manual Windows terminal checks were not run.
+- **Publication scope:** User authorized committing and pushing changes to `main`, then explicitly requested the v0.3.1 bump. The prior implementation checkpoint is `7b2f866`. Neither repository publication nor the bump completes Phase 1. Tags, releases and external guide publication remain outside this request; the local guide is authoritative for these changes.
 - **Future session log format:** Date; task IDs; changes; verification command/result; decisions; blockers or limitations; exact next step. Append concise entries below and keep the current state above accurate.
 
 ### 2026-09-30 — P1.1/P1.2 implementation; P1.3 preparation
@@ -143,3 +143,10 @@ git diff --check
 - Clarified the remaining manual check: visible key-creation and encrypted-key-validation prompts, hidden passphrase input, Ctrl+C returning control and releasing owned locks, unchanged configuration/key hashes after cancellation, and prompt-free noninteractive failure. The disposable preparation and commands are in `docs/HOWTO.html`, under Tests and versioning.
 - Updated `AGENTS.md` so future sessions distinguish automated stream tests from actual Windows console evidence and keep P1.1/P1.3 open until verified. Commit/push authorization does not imply phase completion or permission to modify real configuration.
 - User requested all current changes be committed and pushed to `main`; retain v0.3.0 and the unreleased changelog entry. Prior automated results remain 113 integration, 29 rendering and 20 native checks; this follow-up changes guidance only. The next implementation task remains the manual Windows check, followed by v0.3.1 release verification.
+
+### 2026-09-30 — v0.3.1 version bump; manual verification deferred by user
+
+- User explicitly requested the patch version for the implemented changes and will perform manual Windows verification later. This supersedes the earlier decision to hold v0.3.0 until that check.
+- Updated `$ScriptVersion`, README, HOWTO, CHANGELOG, CLAUDE and both suites' version references to v0.3.1. Updated AGENTS and the current handoff to separate versioning from outstanding acceptance evidence. Historical session entries above retain their original versions and results.
+- Verification: `pwsh -NoProfile -File tests/Run-Tests.ps1` passed 113 checks, including v0.3.1 version-only output with missing config and no dependencies on PATH. `pwsh -NoProfile -File tests/Render-Status.ps1` passed 29 checks. Direct `ghprofile.ps1 --version` printed only v0.3.1; `git diff --check` passed. Native execution behavior was unchanged, so its prior 20 passing checks were not rerun for this metadata-only correction.
+- Next: user performs the HOWTO manual terminal checklist; record and assess the results before closing P1.1/P1.3. No tag, hosted release, external guide publication or real machine configuration change is part of this bump.

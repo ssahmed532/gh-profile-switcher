@@ -19,7 +19,7 @@ param(
     [switch]$NonInteractive
 )
 
-$ScriptVersion = '0.3.0'
+$ScriptVersion = '0.3.1'
 if ($Version -or $Command -eq '--version') { Write-Output "v$ScriptVersion"; exit 0 }
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
