@@ -176,11 +176,11 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
 
   <main>
     <header class="hero">
-      <span class="eyebrow">How-to guide · <code>E:\personal\gh-profile-switcher</code></span>
+      <span class="eyebrow">How-to guide · <code>C:\personal\gh-profile-switcher</code></span>
       <h1>GitHub Profile Switcher</h1>
-      <p class="lede">Use your Spursol and personal GitHub accounts on one Windows laptop. Each repo gets the right name, email, signing key and push account automatically, based on the folder it is in.</p>
+      <p class="lede">Use your work and personal GitHub accounts on one Windows laptop. Each repo gets the right name, email, signing key and push account automatically, based on the folder it is in.</p>
       <div class="meta">
-        <span>Version 1.5</span><span>Last updated 2026-09-30</span><span>Tested with Git 2.55, gh 2.101, GCM 2.9, PowerShell 7</span>
+        <span>Version 1.6</span><span>Last updated 2026-09-30</span><span>Tested with Git 2.55, gh 2.101, GCM 2.9, PowerShell 7</span>
       </div>
     </header>
 
@@ -190,12 +190,12 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
       <h2>How it works</h2>
       <div class="prose">
         <p>The folder a repo is in decides which identity git uses. Nothing has to be switched for git. Repos under your personal folder use the personal profile, and every other repo uses the work profile, as they do today.</p>
-        <p>The folder rule applies only inside a git repo. Git checks the rule against the repo's <code>.git</code> folder, so in a directory that is not a repo, including <code>E:\personal</code> itself, git uses the work profile. A repo you create or clone anywhere under <code>E:\personal\</code> gets the personal profile.</p>
+        <p>The folder rule applies only inside a git repo. Git checks the rule against the repo's <code>.git</code> folder, so in a directory that is not a repo, including <code>C:\personal</code> itself, git uses the work profile. A repo you create or clone anywhere under <code>C:\personal\</code> gets the personal profile.</p>
       </div>
       <div class="routes">
         <div class="lane work">
           <span class="chip work">work · default</span>
-          <span class="where">Any repo outside E:/personal/</span>
+          <span class="where">Any repo outside C:/personal/</span>
           <dl>
             <dt>Email</dt><dd>you@work.example</dd>
             <dt>Signing key</dt><dd>~/.ssh/id_ed25519.pub</dd>
@@ -205,7 +205,7 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
         </div>
         <div class="lane personal">
           <span class="chip personal">personal</span>
-          <span class="where">Any repo under E:/personal/</span>
+          <span class="where">Any repo under C:/personal/</span>
           <dl>
             <dt>Email</dt><dd>your personal email</dd>
             <dt>Signing key</dt><dd>~/.ssh/id_ed25519_personal.pub</dd>
@@ -222,7 +222,7 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
         <table>
           <thead><tr><th>What</th><th>How it is chosen</th><th>Switch needed?</th></tr></thead>
           <tbody>
-            <tr><td>Commit name and email</td><td>A folder rule in <code>~/.gitconfig</code> (<code>includeIf "gitdir/i:E:/personal/"</code>) loads <code>~/.gitconfig-personal</code></td><td class="no">No</td></tr>
+            <tr><td>Commit name and email</td><td>A folder rule in <code>~/.gitconfig</code> (<code>includeIf "gitdir/i:C:/personal/"</code>) loads <code>~/.gitconfig-personal</code></td><td class="no">No</td></tr>
             <tr><td>Commit signing key</td><td>The same file sets <code>user.signingkey</code></td><td class="no">No</td></tr>
             <tr><td>Push and fetch account</td><td>The same file sets <code>credential.https://github.com.username</code>. Git Credential Manager uses the stored login for that account.</td><td class="no">No</td></tr>
             <tr><td><code>gh</code> CLI account</td><td><code>gh auth switch</code></td><td class="yes">Yes</td></tr>
@@ -259,14 +259,14 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
     <section id="setup">
       <span class="eyebrow">One-time · about 10 minutes</span>
       <h2>Setup</h2>
-      <div class="prose"><p>Run the commands from a PowerShell window in <code>E:\personal\gh-profile-switcher</code>. Tick each step as you finish it. The page remembers your ticks in this browser.</p></div>
+      <div class="prose"><p>Run the commands from a PowerShell window in <code>C:\personal\gh-profile-switcher</code>. Tick each step as you finish it. The page remembers your ticks in this browser.</p></div>
 
       <ol class="steps">
         <li class="step" id="s1" data-step="1">
           <span class="num">1</span>
           <div class="step-body">
             <div class="step-head"><h3>Choose the personal folder</h3><label class="done-toggle"><input type="checkbox" id="done-1"> Done</label></div>
-            <p>All personal repos will live under one folder. The default is <code>E:/personal/</code>, and <code>setup</code> creates it if it is missing. Any folder works, as long as no work repo will ever sit inside it.</p>
+            <p>All personal repos will live under one folder. The default is <code>C:/personal/</code>, and <code>setup</code> creates it if it is missing. Any folder works, as long as no work repo will ever sit inside it.</p>
             <p>If you already have personal repos elsewhere, move them into this folder after setup. Moving the folder is all that is needed.</p>
           </div>
         </li>
@@ -292,7 +292,7 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
       "email": <span class="k">"REPLACE-ME@gmail.com"</span>,     <span class="c">// verified email, or the noreply address</span>
       "ghUser": <span class="k">"REPLACE-ME"</span>,               <span class="c">// personal GitHub username</span>
       "signingKey": "~/.ssh/id_ed25519_personal.pub",
-      "root": "E:/personal/"
+      "root": "C:/personal/"
     }
   }
 }</pre>
@@ -316,7 +316,7 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
             </div>
             <div class="note">
               <b class="t">Why not reuse the work key</b>
-              <p>A separate key keeps the two accounts independent. Removing the work key when you leave Spursol, or rotating it, does not affect your personal commit signatures.</p>
+              <p>A separate key keeps the two accounts independent. Removing the work key when you change jobs, or rotating it, does not affect your personal commit signatures.</p>
             </div>
           </div>
         </li>
@@ -392,9 +392,9 @@ footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top
             <p>Make a throwaway repo in the personal folder, make a signed commit, and check the signature:</p>
             <div class="code">
               <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
-<pre>git init E:\personal\signing-test
-cd E:\personal\signing-test
-E:\personal\gh-profile-switcher\ghprofile.ps1 status
+<pre>git init C:\personal\signing-test
+cd C:\personal\signing-test
+C:\personal\gh-profile-switcher\ghprofile.ps1 status
 git commit --allow-empty -m "signing test"
 git log --show-signature -1</pre>
             </div>
@@ -408,7 +408,7 @@ git log --show-signature -1</pre>
               <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
 <pre>git credential-manager github list</pre>
             </div>
-            <p>After you push, the commit shows <em>Verified</em> on GitHub. Delete <code>E:\personal\signing-test</code> when you're done.</p>
+            <p>After you push, the commit shows <em>Verified</em> on GitHub. Delete <code>C:\personal\signing-test</code> when you're done.</p>
           </div>
         </li>
       </ol>
@@ -422,9 +422,9 @@ git log --show-signature -1</pre>
         <table>
           <thead><tr><th>I want to…</th><th>Do this</th></tr></thead>
           <tbody>
-            <tr><td>Work on Spursol code</td><td>Nothing. Work anywhere outside the personal folder.</td></tr>
-            <tr><td>Start a personal repo</td><td><code>git clone https://github.com/&lt;you&gt;/&lt;repo&gt;</code> or <code>git init</code> inside <code>E:\personal\</code></td></tr>
-            <tr><td>Bring an existing personal repo over</td><td>Move its folder into <code>E:\personal\</code>. Commits made before the move keep the email they were made with.</td></tr>
+            <tr><td>Work on a work repo</td><td>Nothing. Keep it anywhere outside the personal folder.</td></tr>
+            <tr><td>Start a personal repo</td><td><code>git clone https://github.com/&lt;you&gt;/&lt;repo&gt;</code> or <code>git init</code> inside <code>C:\personal\</code></td></tr>
+            <tr><td>Bring an existing personal repo over</td><td>Move its folder into <code>C:\personal\</code>. Commits made before the move keep the email they were made with.</td></tr>
             <tr><td>Open a PR or issue on the personal account</td><td><code>.\ghprofile.ps1 switch personal</code>, run your <code>gh</code> commands, then <code>.\ghprofile.ps1 switch work</code></td></tr>
             <tr><td>Check which identity applies here</td><td><code>.\ghprofile.ps1 status</code></td></tr>
             <tr><td>Use the web UI on the personal account</td><td>Use a separate browser profile for personal GitHub. This script doesn't manage browser sessions.</td></tr>
@@ -433,7 +433,7 @@ git log --show-signature -1</pre>
       </div>
       <div class="note">
         <b class="t">Shorter command</b>
-        <p>Add <code>Set-Alias ghp E:\personal\gh-profile-switcher\ghprofile.ps1</code> to your PowerShell <code>$PROFILE</code>. You can then type <code>ghp status</code> or <code>ghp switch personal</code> from any folder.</p>
+        <p>Add <code>Set-Alias ghp C:\personal\gh-profile-switcher\ghprofile.ps1</code> to your PowerShell <code>$PROFILE</code>. You can then type <code>ghp status</code> or <code>ghp switch personal</code> from any folder.</p>
       </div>
     </section>
 
@@ -444,7 +444,7 @@ git log --show-signature -1</pre>
       <div class="prose"><p>Run <code>status</code> inside a repo. It shows what git and <code>gh</code> will use in that directory. Example from a personal repo while <code>gh</code> is still on work:</p></div>
       <div class="code">
         <div class="label">Output</div>
-<pre>Directory      : E:\personal\blog
+<pre>Directory      : C:\personal\blog
 git profile    : <span class="p">personal</span>
 git identity   : Your Name &lt;you@gmail.com&gt;
 git signing key: C:/Users/you/.ssh/id_ed25519_personal.pub
@@ -467,11 +467,11 @@ gh CLI as      : <span class="w">your-work-user</span>
       <div class="prose"><p>Outside a repo, <code>status</code> (and <code>switch</code>, which prints it) shows only the <code>gh</code> account and the folder rule. It leaves out the git lines, because there they would show the work defaults even after <code>switch personal</code>:</p></div>
       <div class="code">
         <div class="label">Output</div>
-<pre>Directory      : E:\personal\gh-profile-switcher
+<pre>Directory      : C:\personal\gh-profile-switcher
 git profile    : &lt;none - not inside a git repo&gt;
 gh CLI as      : <span class="p">your-personal-user</span>
 
-Git picks the identity per repo: repos under E:/personal/ use 'personal'; all other repos use 'work'.
+Git picks the identity per repo: repos under C:/personal/ use 'personal'; all other repos use 'work'.
 Run status inside a repo to see the identity it will use there.</pre>
       </div>
     </section>
@@ -552,11 +552,11 @@ git credential-manager github logout &lt;account&gt;</pre></div>
           <thead><tr><th>Task</th><th>Steps</th></tr></thead>
           <tbody>
             <tr><td>Change an email, name or key</td><td>Edit <code>profiles.json</code>, then run <code>.\ghprofile.ps1 setup</code>. For a new key, repeat step 6 for that account.</td></tr>
-            <tr><td>Move the personal folder</td><td>Edit <code>root</code>, run <code>setup</code>, move the repos, then remove the old rule:<br><code>git config --global --unset "includeIf.gitdir/i:E:/personal/.path"</code> (use the old path)</td></tr>
+            <tr><td>Move the personal folder</td><td>Edit <code>root</code>, run <code>setup</code>, move the repos, then remove the old rule:<br><code>git config --global --unset "includeIf.gitdir/i:C:/personal/.path"</code> (use the old path)</td></tr>
             <tr><td>Add a third account</td><td>Add a profile with its own <code>root</code> to <code>profiles.json</code>, run <code>setup</code>, then do steps 5 to 7 for it</td></tr>
             <tr><td>Undo the last setup run</td><td>Copy the newest <code>~/.gitconfig.bak-&lt;timestamp&gt;</code> over <code>~/.gitconfig</code>. Logins stored in <code>gh</code> and Git Credential Manager are not affected.</td></tr>
             <tr><td>Remove the personal account completely</td><td>
-              <code>git config --global --unset "includeIf.gitdir/i:E:/personal/.path"</code><br>
+              <code>git config --global --unset "includeIf.gitdir/i:C:/personal/.path"</code><br>
               delete <code>~/.gitconfig-personal</code><br>
               <code>gh auth logout --hostname github.com --user &lt;personal-user&gt;</code><br>
               <code>git credential-manager github logout &lt;personal-user&gt;</code><br>
@@ -575,9 +575,9 @@ git credential-manager github logout &lt;account&gt;</pre></div>
         <table>
           <thead><tr><th>File</th><th>Owner</th><th>Purpose</th></tr></thead>
           <tbody>
-            <tr><td><code>E:\personal\gh-profile-switcher\profiles.json</code></td><td>You</td><td>The only file you edit. Defines each profile. Git-ignored.</td></tr>
-            <tr><td><code>E:\personal\gh-profile-switcher\profiles.example.json</code></td><td>Tool</td><td>Template for <code>profiles.json</code>, with placeholder values</td></tr>
-            <tr><td><code>E:\personal\gh-profile-switcher\ghprofile.ps1</code></td><td>Tool</td><td><code>setup</code>, <code>switch &lt;profile&gt;</code>, <code>status</code></td></tr>
+            <tr><td><code>C:\personal\gh-profile-switcher\profiles.json</code></td><td>You</td><td>The only file you edit. Defines each profile. Git-ignored.</td></tr>
+            <tr><td><code>C:\personal\gh-profile-switcher\profiles.example.json</code></td><td>Tool</td><td>Template for <code>profiles.json</code>, with placeholder values</td></tr>
+            <tr><td><code>C:\personal\gh-profile-switcher\ghprofile.ps1</code></td><td>Tool</td><td><code>setup</code>, <code>switch &lt;profile&gt;</code>, <code>status</code></td></tr>
             <tr><td><code>~/.gitconfig</code></td><td>setup</td><td>Work identity and one folder rule per extra profile</td></tr>
             <tr><td><code>~/.gitconfig-personal</code></td><td>setup</td><td>Personal identity, signing key and push account. It is regenerated on every run, so edit <code>profiles.json</code> instead.</td></tr>
             <tr><td><code>~/.gitconfig.bak-&lt;timestamp&gt;</code></td><td>setup</td><td>Backup taken before each run</td></tr>
@@ -599,7 +599,7 @@ git credential-manager github logout &lt;account&gt;</pre></div>
 </div>
 
 <footer>
-  <span>GitHub Profile Switcher · Version 1.5 · Last updated 2026-09-30</span>
+  <span>GitHub Profile Switcher · Version 1.6 · Last updated 2026-09-30</span>
   <span>Produced with Claude Code (CLI on Windows, PowerShell), model Claude Opus 5.5</span>
 </footer>
 

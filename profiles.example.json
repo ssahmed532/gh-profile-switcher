@@ -12,7 +12,7 @@
       "email": "REPLACE-ME@gmail.com",
       "ghUser": "REPLACE-ME",
       "signingKey": "~/.ssh/id_ed25519_personal.pub",
-      "root": "E:/personal/"
+      "root": "C:/personal/"
     }
   }
 }
