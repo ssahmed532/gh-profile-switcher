@@ -19,7 +19,7 @@ param(
     [switch]$NonInteractive
 )
 
-$ScriptVersion = '0.2.0'
+$ScriptVersion = '0.3.0'
 if ($Version -or $Command -eq '--version') { Write-Output "v$ScriptVersion"; exit 0 }
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -183,15 +183,28 @@ function New-ProfileKey($Profile) {
 
 function Install-Profiles($Configuration) {
     $global = Get-GlobalPath
+    Write-SetupEvent 'PLAN' 'Config' $global
+    Write-SetupEvent '' 'Policy' $Configuration.Policy
+    foreach ($p in $Configuration.Profiles.Values) {
+        $roots = if ($p.Roots.Count) { $p.Roots -join '; ' } else { 'unmatched repositories (default)' }
+        Write-SetupEvent '' 'Profile' "$($p.Id) -> $roots; signing: $($p.Mode)"
+    }
+    if ($WhatIfPreference) { Write-SetupEvent 'PREVIEW' 'No changes' 'Profile data validated. Key validation and configuration activation will run when applying setup.' 'warning' }
     if (-not $PSCmdlet.ShouldProcess($global, 'Validate keys and atomically activate managed Git profiles')) { return }
+    Write-SetupEvent 'VALIDATION' 'Checking' 'Validating signing keys before changing configuration. Encrypted file keys may prompt for a passphrase.'
     $publicKeys = @{}
-    foreach ($p in $Configuration.Profiles.Values) { $publicKeys[$p.Id] = Test-SigningKey $p }
+    foreach ($p in $Configuration.Profiles.Values) {
+        $publicKeys[$p.Id] = Test-SigningKey $p
+        $description = if ($p.Mode -eq 'none') { 'Signing disabled by profile policy.' } else { 'Signing key validated.' }
+        Write-SetupEvent '' 'Profile' "$($p.Id): $description" 'success'
+    }
     [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($global))
     $lockPath = "$global.lock"
     $lock = [IO.File]::Open($lockPath, 'CreateNew', 'Write', 'None')
     $managed = "$global.ghprofile"
     $stage = "$global.ghprofile-stage-$([guid]::NewGuid().ToString('N'))"
     try {
+        Write-SetupEvent 'CONFIGURATION' 'Preparing' 'Lock acquired. Building and validating a new managed configuration.'
         $existed = [IO.File]::Exists($global)
         $original = [byte[]]@()
         if ($existed) { $original = [IO.File]::ReadAllBytes($global) }
@@ -272,9 +285,10 @@ function Install-Profiles($Configuration) {
         if ($backup) { [IO.File]::Copy($global,$backup,$false) }
         # Same-volume atomic replacement: failure before this point leaves active config unchanged.
         if ($existed) { [IO.File]::Replace($stage,$global,[NullString]::Value) } else { [IO.File]::Move($stage,$global) }
-        Write-Output "Configured $($Configuration.Profiles.Count) profiles ($($Configuration.Policy) policy)."
-        if ($backup) { Write-Output "Backup: $backup" }
-        Write-Output 'Run doctor inside each repository. Git credentials and GitHub signing-key registration are checked separately.'
+        Write-SetupEvent 'COMPLETE' 'Activated' "Configured $($Configuration.Profiles.Count) profiles ($($Configuration.Policy) policy)." 'success'
+        if ($backup) { Write-SetupEvent '' 'Backup' $backup }
+        else { Write-SetupEvent '' 'Backup' 'Not needed: no previous global configuration existed.' }
+        Write-SetupEvent 'NEXT STEP' 'Verify' 'Run ghprofile.ps1 doctor inside each repository. Git credentials and GitHub signing-key registration are checked separately.'
     } finally {
         if ([IO.File]::Exists($stage)) { [IO.File]::Delete($stage) }
         $lock.Dispose()
@@ -425,6 +439,52 @@ function Format-Status {
     }
 }
 
+function Get-ConsolePresentation([bool]$InPipeline) {
+    $width = 96
+    try { if ($Host.UI.RawUI.WindowSize.Width -gt 20) { $width = [Math]::Min(96, $Host.UI.RawUI.WindowSize.Width - 1) } } catch { }
+    $interactive = -not [Console]::IsOutputRedirected -and $Host.UI.SupportsVirtualTerminal -and -not $InPipeline
+    $autoColor = $interactive -and $env:TERM -ne 'dumb' -and $null -eq [Environment]::GetEnvironmentVariable('NO_COLOR') -and $PSStyle.OutputRendering -ne 'PlainText'
+    return @{ Width=$width; Rich=(-not $Plain -and ($interactive -or $Color -eq 'Always')); UseColor=($Color -eq 'Always' -or ($Color -eq 'Auto' -and $autoColor)) }
+}
+
+function Write-ConsoleLines([string[]]$Lines, [switch]$ToError) {
+    # Windows legacy code pages replace these symbols with '?'. Restore the
+    # caller's encoding after each UI write, including failures.
+    $encoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+        foreach ($line in $Lines) {
+            if ($ToError) { [Console]::Error.WriteLine($line) } else { [Console]::WriteLine($line) }
+        }
+    } finally { [Console]::OutputEncoding = $encoding }
+}
+
+function Format-SetupEvent {
+    param([string]$Section, [string]$Label, [string]$Value, [string]$Tone='normal', [int]$Width=96, [switch]$Rich, [switch]$UseColor)
+    $reset=''; $accent=''; $dim=''; $bold=''
+    if ($Rich -and $UseColor) {
+        $reset="`e[0m"; $dim="`e[90m"; $bold="`e[1m"
+        $accent = switch ($Tone) { 'success' { "`e[32m" } 'warning' { "`e[33m" } 'error' { "`e[31m" } default { "`e[36m" } }
+    }
+    if ($Section) { ''; if ($Rich) { "  ${accent}${bold}$Section${reset}" } else { $Section } }
+    $icon = switch ($Tone) { 'success' { '✓' } 'warning' { '!' } 'error' { '×' } default { '›' } }
+    $rowWidth = if ($Rich) { $Width - 4 } else { $Width }
+    foreach ($line in @(Format-StatusLine $Label $Value $rowWidth)) {
+        if ($Rich) {
+            $ink = if ($Tone -eq 'normal') { $dim } else { $accent }
+            "  ${accent}$icon${reset} ${ink}$line${reset}"
+            $icon=' '
+        } else { $line }
+    }
+}
+
+function Write-SetupEvent {
+    param([string]$Section, [string]$Label, [string]$Value, [string]$Tone='normal')
+    $lines = @(Format-SetupEvent $Section $Label $Value $Tone -Width $presentation.Width -Rich:$presentation.Rich -UseColor:$presentation.UseColor)
+    if ($presentation.Rich -or $Tone -eq 'error') { Write-ConsoleLines $lines -ToError:($Tone -eq 'error') }
+    else { $lines }
+}
+
 function Format-RichStatus {
     param($Status, [int]$Width = 96, [switch]$UseColor)
     # Style after wrapping: escape sequences must not count towards visible width.
@@ -480,10 +540,12 @@ function Format-RichStatus {
     ''
 }
 
+$presentation = Get-ConsolePresentation ($MyInvocation.PipelinePosition -ne $MyInvocation.PipelineLength)
 try {
     if ($Command -notin @('setup','status','doctor','switch','init-key')) { throw 'Usage: ghprofile.ps1 setup|status|doctor|switch <profile>|init-key <profile>|--version [-ConfigPath path] [-Json] [-NonInteractive] [-WhatIf]' }
     if ($Name -and $Command -notin @('switch','init-key')) { throw 'A profile argument is only valid for switch and init-key.' }
     if ($Json -and $Command -notin @('status','doctor')) { throw '-Json is supported by status and doctor.' }
+    if ($Command -eq 'setup') { Write-SetupEvent "ghprofile setup  v$ScriptVersion" 'Starting' 'Reading profile definitions and checking dependencies.' }
     $configuration = Read-Profiles
     $gitVersion = (Invoke-Native git @('--version')).Out
     if ($gitVersion -notmatch '(\d+)\.(\d+)\.(\d+)' -or [version]$Matches[0] -lt [version]'2.34.0') { throw 'Git 2.34 or newer is required.' }
@@ -507,16 +569,12 @@ try {
             $result = Get-Status $configuration -Doctor:($Command -eq 'doctor')
             if ($Json) { $result | ConvertTo-Json -Depth 12 }
             else {
-                $width = 96
-                try { if ($Host.UI.RawUI.WindowSize.Width -gt 20) { $width = [Math]::Min(96, $Host.UI.RawUI.WindowSize.Width - 1) } } catch { }
-                $interactive = -not [Console]::IsOutputRedirected -and $Host.UI.SupportsVirtualTerminal -and $MyInvocation.PipelinePosition -eq $MyInvocation.PipelineLength
-                $autoColor = $interactive -and $env:TERM -ne 'dumb' -and $null -eq [Environment]::GetEnvironmentVariable('NO_COLOR') -and $PSStyle.OutputRendering -ne 'PlainText'
-                $useColor = $Color -eq 'Always' -or ($Color -eq 'Auto' -and $autoColor)
-                if (-not $Plain -and ($interactive -or $Color -eq 'Always')) {
+                $width = $presentation.Width
+                if ($presentation.Rich) {
                     # Terminal UI bypasses PowerShell's host formatter, which strips
                     # ANSI under TERM=dumb even after OutputRendering is changed.
                     # Plain/JSON remain ordinary pipeline output for automation.
-                    Format-RichStatus $result -Width $width -UseColor:$useColor | ForEach-Object { [Console]::WriteLine($_) }
+                    Write-ConsoleLines @(Format-RichStatus $result -Width $width -UseColor:$presentation.UseColor)
                 } else { Format-Status $result -Width $width }
                 foreach ($entry in $result.Settings.GetEnumerator()) {
                     if ($entry.Value -isnot [string]) { Write-Verbose "$($entry.Key): $($entry.Value.Value); origin: $($entry.Value.Origin)" }
@@ -530,6 +588,7 @@ try {
 } catch {
     $message = Protect-Text $_.Exception.Message
     if ($Json) { @{ Version=$ScriptVersion; Error=$message } | ConvertTo-Json -Compress }
+    elseif ($Command -eq 'setup') { Write-SetupEvent 'SETUP FAILED' 'Error' $message 'error' }
     else { [Console]::Error.WriteLine("ghprofile: $message") }
     exit 1
 }

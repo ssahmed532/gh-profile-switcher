@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2026-09-30
+
+- Extend rich console presentation to setup: profile plans, signing-key checks, configuration progress, activation results, backups and next steps.
+- Add styled no-write previews and red stderr failures without displaying a premature success state.
+- Share terminal capability/color detection with status; preserve plain output and ShouldProcess semantics.
+- Emit rich console text in UTF-8, restoring the caller's encoding after each write to prevent legacy Windows code pages from replacing symbols with question marks.
+- Add setup rendering and entrypoint tests, including narrow-width wrapping, previews, failures and activation.
+
 ## [0.2.0] - 2026-09-30
 
 - Add a rich interactive status/doctor display with colored headings, authentication states, Unicode symbols and grouped identity, remote, CLI and warning sections.

@@ -1,15 +1,15 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GitHub Profile Switcher v0.2.0</title>
+<title>GitHub Profile Switcher v0.3.0</title>
 <style>
 :root{color-scheme:light dark;font-family:system-ui,sans-serif;line-height:1.6}body{max-width:1050px;margin:auto;padding:2rem;color:light-dark(#18202c,#e5e9f0);background:light-dark(#f5f7fa,#11151c)}h1,h2{line-height:1.2}h2{margin-top:2.5rem}a{color:light-dark(#175bb0,#8cbeff)}pre{padding:1rem;overflow:auto;background:light-dark(#e8edf4,#202733);border-radius:8px}code{font-family:Consolas,monospace}table{border-collapse:collapse;width:100%}td,th{padding:.65rem;text-align:left;border-bottom:1px solid #87909c;vertical-align:top}.note{border-left:4px solid #aa7b24;padding:.8rem 1rem;background:light-dark(#fff3d5,#312816)}nav{display:flex;flex-wrap:wrap;gap:1rem}small{color:light-dark(#566073,#b3bdcc)}
 </style></head><body>
-<header><h1>GitHub Profile Switcher</h1><p>Folder-based Git identities, explicit GitHub CLI switching, and diagnostics that distinguish configuration from authentication.</p><small>Version v0.2.0 · Updated 2026-09-30 · PowerShell 7.2+</small></header>
+<header><h1>GitHub Profile Switcher</h1><p>Folder-based Git identities, explicit GitHub CLI switching, and diagnostics that distinguish configuration from authentication.</p><small>Version v0.3.0 · Updated 2026-09-30 · PowerShell 7.2+</small></header>
 <nav aria-label="Contents"><a href="#setup">Setup</a><a href="#config">Configuration</a><a href="#daily">Daily use</a><a href="#keys">Signing keys</a><a href="#credentials">Credentials</a><a href="#recovery">Migration and recovery</a><a href="#limits">Limits</a><a href="#development">Development</a></nav>
 <section id="setup"><h2>1. Setup</h2>
 <p>Install PowerShell 7.2+, Git 2.34+, a GitHub CLI version supporting multi-account switching and JSON auth status, and an SSH-signing-capable OpenSSH installation. Signing profiles need <code>ssh-keygen</code>; agent mode also needs <code>ssh-add</code>. A credential helper such as Git Credential Manager is needed for convenient HTTPS authentication. Setup does not install software or change credential helpers.</p>
 <pre><code>pwsh -NoProfile -File ./ghprofile.ps1 --version
-# Prints exactly: v0.2.0
+# Prints exactly: v0.3.0
 Copy-Item profiles.example.json profiles.json
 # Edit every REPLACE-ME value and choose roots for this computer.
 ./ghprofile.ps1 setup -WhatIf
@@ -20,6 +20,8 @@ Copy-Item profiles.example.json profiles.json
 # Run inside each repository:
 ./ghprofile.ps1 doctor</code></pre>
 <p>Only run <code>init-key</code> for a new pair. Setup validates every profile and signing key before activating any configuration. It does not generate keys, create repository roots, log in, upload keys, or push anything.</p>
+<p>Setup shares status's rich console styling. Its PLAN section lists the global configuration destination, policy, roots and signing modes. VALIDATION shows per-profile key results; CONFIGURATION reports staging; COMPLETE appears only after activation succeeds, followed by the backup location and a doctor command. A fresh installation explicitly explains why no backup was necessary.</p>
+<p><code>setup -WhatIf</code> displays a PREVIEW without validating keys or writing configuration. <code>setup -Plain</code> uses plain text, and <code>setup -Color Always</code> forces rich output. Failures appear in red on stderr with exit 1. UTF-8 is used for rich console writes and the caller's output encoding is restored immediately afterward.</p>
 <p>Use <code>-ConfigPath /absolute/path/profiles.json</code> to keep personal configuration outside this checkout. The default is <code>profiles.json</code> beside the script. It is git-ignored; do not commit private keys, tokens, or your personal configuration.</p></section>
 <section id="config"><h2>2. Configuration and identity policy</h2>
 <pre><code>{
@@ -105,7 +107,7 @@ gh ssh-key add "$HOME/.ssh/personal-signing.pub" --type signing --title "This co
 <pre><code>pwsh -NoProfile -File tests/Render-Status.ps1
 pwsh -NoProfile -File tests/Render-Status.ps1 -Preview</code></pre>
 <p>The dependency-free suite uses temporary repositories, isolated Git/gh configuration, disposable SSH keys and mocked authentication responses. It exercises signing/verification, setup reconciliation, strict mode, migration, worktrees, input serialization, failure isolation, agent mode and version output. It never switches real accounts or uploads keys. Temporary fixture paths are printed for inspection.</p>
-<p>The release version has a single source in <code>$ScriptVersion</code> in ghprofile.ps1. <code>--version</code> and <code>-Version</code> print only <code>v0.2.0</code> before config or dependency checks. The initial release was 0.1.0; 0.1.1 fixed console readability, and 0.2.0 adds rich terminal presentation under <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning 2.0.0</a>.</p>
+<p>The release version has a single source in <code>$ScriptVersion</code> in ghprofile.ps1. <code>--version</code> and <code>-Version</code> print only <code>v0.3.0</code> before config or dependency checks. The initial release was 0.1.0; 0.1.1 fixed console readability, 0.2.0 added rich status output, and 0.3.0 extends styling to setup under <a href="https://semver.org/spec/v2.0.0.html">Semantic Versioning 2.0.0</a>.</p>
 <p>The versioned interface consists of documented commands, parameters, profile schema, exit codes and JSON fields. In 0.x releases, compatible fixes increment PATCH and feature/breaking interface changes increment MINOR, with changes documented in CHANGELOG.md. Starting at 1.0.0, breaking changes increment MAJOR. Keep release documentation and version tests synchronized; schemaVersion changes independently when the configuration schema becomes incompatible.</p>
 <p>References: <a href="https://git-scm.com/docs/git-config">Git configuration</a>, <a href="https://git-scm.com/docs/gitcredentials">Git credentials</a>, <a href="https://cli.github.com/manual/gh_auth_status">gh auth status</a>, <a href="https://cli.github.com/manual/gh_help_environment">gh environment</a>.</p></section>
-<footer><hr><small>GitHub Profile Switcher · v0.2.0 · 2026-09-30</small></footer></body></html>
+<footer><hr><small>GitHub Profile Switcher · v0.3.0 · 2026-09-30</small></footer></body></html>

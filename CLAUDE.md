@@ -1,6 +1,6 @@
 # CLAUDE.md — gh-profile-switcher
 
-> **Version:** v0.2.0 — Last updated 2026-09-30
+> **Version:** v0.3.0 — Last updated 2026-09-30
 
 ## Rules
 

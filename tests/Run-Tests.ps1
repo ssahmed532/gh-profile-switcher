@@ -49,12 +49,12 @@ function GitValue([string]$Directory,[string]$Key) { (Run git @('config','--get'
 
 try {
     $r = Script @('--version','-ConfigPath',(Join-Path $scratch 'missing.json'))
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.2.0' -and -not $r.Error) '--version prints only v0.2.0 without config'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.0' -and -not $r.Error) '--version prints only v0.3.0 without config'
     $r = Script @('-Version')
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.2.0') 'PowerShell -Version alias'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.0') 'PowerShell -Version alias'
     $r = Script @('--version') $scratch @{ PATH='' }
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.2.0' -and -not $r.Error) 'Version works without Git, gh or OpenSSH on PATH'
-    Assert (([System.Management.Automation.SemanticVersion]::Parse($r.Out.Substring(1))).ToString() -ceq '0.2.0') 'Release version is valid SemVer'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.0' -and -not $r.Error) 'Version works without Git, gh or OpenSSH on PATH'
+    Assert (([System.Management.Automation.SemanticVersion]::Parse($r.Out.Substring(1))).ToString() -ceq '0.3.0') 'Release version is valid SemVer'
     $errors = $null; $tokens = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($scriptFile,[ref]$tokens,[ref]$errors)
     Assert ($errors.Count -eq 0) 'Script parses'
@@ -71,6 +71,9 @@ try {
     $r = Script @('setup','-ConfigPath',$testConfig,'-WhatIf','-NonInteractive')
     Good $r 'WhatIf succeeds'
     Assert (-not [IO.File]::Exists($testGlobal) -and -not [IO.Directory]::Exists("$testGlobal.ghprofile")) 'WhatIf writes nothing'
+    $r=Script @('setup','-ConfigPath',$testConfig,'-WhatIf','-Color','Always')
+    Assert ($r.Code -eq 0 -and $r.Out -match '\x1b\[' -and $r.Out -match 'PREVIEW' -and $r.Out -notmatch 'COMPLETE') 'Rich setup preview describes the plan without claiming completion'
+    Assert (-not [IO.File]::Exists($testGlobal) -and -not [IO.Directory]::Exists("$testGlobal.ghprofile")) 'Rich preview writes no configuration'
     Good (Setup) 'Fresh-machine setup without an existing global config'
     [IO.File]::WriteAllText($testGlobal,'')
     Good (Setup) 'Setup accepts an existing empty global config'
@@ -79,6 +82,9 @@ try {
     Assert ((GitValue $personal user.name) -ceq 'Personal "Quoted" # Name') 'Quotes and comment characters round-trip'
     Assert ((GitValue $outside user.email) -eq 'work@example.invalid') 'Default fallback identity'
     Good (Setup) 'Repeated setup'
+    $r=Script @('setup','-ConfigPath',$testConfig,'-NonInteractive','-Color','Always')
+    Good $r 'Rich setup activation'
+    Assert ($r.Out -match 'VALIDATION' -and $r.Out -match 'CONFIGURATION' -and $r.Out -match 'COMPLETE' -and $r.Out -match 'Backup' -and $r.Out -match '✓') 'Rich setup reports phases, backup and intact UTF-8 success symbols'
     $includes = Run git @('config','--file',$testGlobal,'--get-all','include.path')
     Assert (($includes.Out -split '\r?\n').Count -eq 1) 'Repeated setup retains exactly one managed include'
 
@@ -120,6 +126,8 @@ try {
     $config.profiles.personal.roots=@($moved,(Join-Path $moved 'nested')); $config.profiles.personal.Remove('root'); SaveConfig
     $r = Setup
     Assert ($r.Code -eq 1 -and $r.Error -match 'Overlapping') 'Overlapping roots are rejected'
+    $r=Script @('setup','-ConfigPath',$testConfig,'-Color','Always')
+    Assert ($r.Code -eq 1 -and $r.Error -match 'SETUP FAILED' -and $r.Error -match '\x1b\[31m' -and $r.Out -notmatch 'COMPLETE') 'Setup validation failures are styled on stderr with failure exit code'
     Assert ([IO.File]::ReadAllText($testGlobal) -ceq $before) 'Validation failure leaves active config unchanged'
     $config.profiles.personal.roots=@($moved); SaveConfig
     [IO.File]::WriteAllText("$testGlobal.lock",'occupied')

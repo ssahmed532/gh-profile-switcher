@@ -10,7 +10,7 @@ foreach ($fn in $ast.FindAll({param($n) $n -is [Management.Automation.Language.F
     . ([scriptblock]::Create($fn.Extent.Text))
 }
 $fixture = [pscustomobject]@{
-    Version='0.2.0'; Directory='C:/personal/gh-profile-switcher'; InRepository=$true
+    Version='0.3.0'; Directory='C:/personal/gh-profile-switcher'; InRepository=$true
     EffectiveProfile='personal'; ExpectedProfile='personal'; Healthy=$true
     Settings=@{
         author='Personal Example <personal@example.com>'; committer='Personal Example <personal@example.com>'
@@ -46,6 +46,14 @@ $plain=@(Format-Status $fixture -Width 80)
 Assert (($plain -join "`n") -notmatch '\x1b|◇|◆|✓|↗') 'Plain output preserves ASCII-friendly labels'
 $fixture.InRepository=$false; $fixture.Settings=@{}; $fixture.PushDestinations=@()
 Assert (((Format-RichStatus $fixture -Width 80) -join "`n") -match 'outside a Git repository') 'Outside-repository view renders'
+foreach ($width in @(40,60,96)) {
+    $setupLines=@(Format-SetupEvent 'COMPLETE' 'Backup' ('C:/long-backup-path/' * 8) 'success' -Width $width -Rich -UseColor)
+    Assert (@($setupLines | Where-Object { (Strip $_).Length -gt $width }).Count -eq 0) "Setup paths wrap to $width columns"
+}
+$setupError=(Format-SetupEvent 'SETUP FAILED' 'Error' 'Key validation failed.' 'error' -Rich -UseColor) -join "`n"
+Assert ($setupError -match '\x1b\[31m' -and $setupError -notmatch 'COMPLETE') 'Setup errors are red and never claim completion'
+$setupPlain=(Format-SetupEvent 'PREVIEW' 'No changes' 'Validation will run when applying setup.' 'warning') -join "`n"
+Assert ($setupPlain -notmatch '\x1b' -and $setupPlain -match 'No changes') 'Plain setup preview has no ANSI escapes'
 if ($Preview) {
     $rich | ForEach-Object { [Console]::WriteLine($_) }
     $fixture.InRepository=$true
