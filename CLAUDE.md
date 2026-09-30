@@ -1,6 +1,6 @@
 # CLAUDE.md — gh-profile-switcher
 
-> **Version:** 1.3 — Last updated 2026-09-30
+> **Version:** v0.1.1 — Last updated 2026-09-30
 
 ## Rules
 
@@ -11,8 +11,11 @@
 ## Constraints
 
 - This is a public GitHub repo (link in `README.md`). It sits under the personal profile's `root` folder (see `profiles.json`), so its commits use the personal profile. Every tracked file is public.
-- `setup` rewrites the real `~/.gitconfig`, `~/.gitconfig-<profile>` and `~/.ssh/allowed_signers`. Run it only when the user asks. To test a single function, load it from the script's AST in a scratch script and stub `git` so `allowed_signers` is not touched.
-- `ssh-agent` is disabled on this machine. Signing runs `ssh-keygen` with the `.pub` path in `user.signingkey`, and it loads the private key from the same path without `.pub`.
+- Run real `setup` or `switch` only when the user asks to apply configuration or switch accounts; requests to edit the script do not require applying it to the machine.
+- Tests use `tests/Run-Tests.ps1`, isolated `GIT_CONFIG_GLOBAL`/`GH_CONFIG_DIR`, temporary repositories and disposable keys. Never use real profiles for integration tests.
+- Setup writes immutable generations beside the selected global Git config, then atomically activates one managed include. Old files and external allowed-signers files are preserved.
+- `ssh-agent` is disabled on this machine. File signing uses the private-key path explicitly and validates the matching `.pub` file; agent mode is separately supported.
+- `$ScriptVersion` in `ghprofile.ps1` is the release version source. Keep README, HOWTO, CHANGELOG and version tests synchronized.
 
 ## Gotchas
 

@@ -1,16 +1,25 @@
 # gh-profile-switcher
 
-> **Version:** 1.6 — Last updated 2026-09-30
+> **Version:** v0.1.1 — Last updated 2026-09-30
 
-Use more than one GitHub account on one Windows machine without mixing up commits, signatures or push credentials. Identity is chosen by folder: repos under a profile's `root` use that profile's name, email, SSH signing key and GitHub account, and all other repos use the default profile. The folder rule applies only inside a git repo: in a directory that is not a repo, including a profile's `root` folder itself, git uses the default profile, so `status` and `switch` show only the `gh` account and the folder rule there. Only the `gh` CLI account is switched by hand.
+Manage folder-based Git identities and signing settings, with explicit GitHub CLI account switching and diagnostics; push authentication is reported separately as unverified.
+
+- Requires PowerShell 7.2+, Git 2.34+, a current GitHub CLI, and OpenSSH for signing; Windows is the verified platform.
+- Copy `profiles.example.json` to `profiles.json`, fill in the values, then run `./ghprofile.ps1 setup -WhatIf` followed by `setup`.
+- `strict` policy requires explicit roots for every profile; `default` policy retains an unmatched-repository fallback for compatibility.
+- `init-key <profile>` creates a new signing key interactively and refuses to overwrite either existing key file.
+- `switch <profile>` changes the shared gh account; `status` explains identity selection; `doctor` detects configuration and authentication issues.
+- Default status is a compact, width-aware console summary; `status -Verbose` shows configuration origins and helpers, while `status -Json` retains structured details.
+- `-ConfigPath`, `-WhatIf`, `-NonInteractive`, and status/doctor `-Json` support reuse and automation.
+- `./ghprofile.ps1 --version` prints only `v0.1.1`, without loading configuration or checking dependencies.
+- Versioning follows [SemVer](https://semver.org/spec/v2.0.0.html); the current patch release is `0.1.1`, with release details in [CHANGELOG.md](CHANGELOG.md).
+- Run isolated regression tests with `pwsh -NoProfile -File tests/Run-Tests.ps1`.
 
 ## Files
 
-- `profiles.json`: the profile definitions. `default` names the profile kept in the global `~/.gitconfig`. Every other profile needs a `root` folder. It is git-ignored; create it by copying `profiles.example.json` and replacing every `REPLACE-ME` value.
-- `ghprofile.ps1`: `setup`, `switch <profile>` and `status`. `setup` stops with an error if a profile's `signingKey` `.pub` file has no private key next to it (same path without `.pub`), because signing without `ssh-agent` needs that file.
-- `docs/HOWTO.html`: the full guide, covering how it works, setup steps, daily use, troubleshooting, changes and removal, and limits. It is published as a private artifact at https://claude.ai/artifact/MtDvSF8CV4CsK59EXnX77o; others can open `docs/HOWTO.html` from the repo instead.
+- `profiles.json`: git-ignored profile definitions; existing `default`/`root` configurations remain supported.
+- `ghprofile.ps1`: validated setup with immutable generations, an atomic global-config activation, backups, and checked native commands.
+- [docs/HOWTO.html](docs/HOWTO.html): full setup, credential provisioning, signing, migration, recovery, limitations and versioning guide.
+- The previously published private guide is at https://claude.ai/artifact/MtDvSF8CV4CsK59EXnX77o; use the local guide for v0.1.1 until that artifact is republished.
 - Repo: https://github.com/ssahmed532/gh-profile-switcher (public).
 - `CLAUDE.md`: rules and gotchas for Claude Code sessions in this folder.
-
----
-*Produced with Claude Code (CLI, Windows / PowerShell), model Claude Opus 5.5.*

@@ -1,18 +1,23 @@
 {
-  "default": "work",
+  "schemaVersion": 1,
+  "policy": "strict",
   "profiles": {
     "work": {
       "name": "REPLACE-ME",
       "email": "REPLACE-ME@work.example",
       "ghUser": "REPLACE-ME",
+      "host": "github.com",
+      "roots": ["C:/work/"],
+      "signingMode": "file",
       "signingKey": "~/.ssh/id_ed25519.pub"
     },
     "personal": {
       "name": "REPLACE-ME",
       "email": "REPLACE-ME@gmail.com",
       "ghUser": "REPLACE-ME",
+      "signingMode": "file",
       "signingKey": "~/.ssh/id_ed25519_personal.pub",
-      "root": "C:/personal/"
+      "roots": ["C:/personal/"]
     }
   }
 }
