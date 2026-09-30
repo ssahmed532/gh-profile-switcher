@@ -1,0 +1,651 @@
+<title>GitHub Profile Switcher</title>
+<meta name="description" content="Step-by-step guide to setting up and using two GitHub identities on one Windows machine with ghprofile.ps1.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --ground: #f5f7fa;
+  --surface: #ffffff;
+  --sunken: #eceff4;
+  --ink: #18202c;
+  --muted: #566073;
+  --rule: #d9dee7;
+  --work: #1f5fad;
+  --work-soft: #e3ecf8;
+  --personal: #8a3fa0;
+  --personal-soft: #f3e7f6;
+  --ok: #2f7a46;
+  --warn: #9a5b00;
+  --warn-soft: #fbf1df;
+  --focus: #1f5fad;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #11151c; --surface: #181d26; --sunken: #0d1117; --ink: #e5e9f0; --muted: #9aa4b5; --rule: #2a313d;
+    --work: #7aaaf2; --work-soft: #1a2a42; --personal: #cf95e0; --personal-soft: #2e1f36;
+    --ok: #6cc389; --warn: #e2a64a; --warn-soft: #2e2415; --focus: #7aaaf2;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #11151c; --surface: #181d26; --sunken: #0d1117; --ink: #e5e9f0; --muted: #9aa4b5; --rule: #2a313d;
+  --work: #7aaaf2; --work-soft: #1a2a42; --personal: #cf95e0; --personal-soft: #2e1f36;
+  --ok: #6cc389; --warn: #e2a64a; --warn-soft: #2e2415; --focus: #7aaaf2;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink);
+  font: 16px/1.65 var(--body);
+  padding: 0 20px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--work); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); letter-spacing: -0.02em; }
+h2 { font-size: 1.65rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.15rem; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--sunken); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font: 600 0.75rem/1 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+.page { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; padding-block: 56px 40px; }
+@media (max-width: 860px) { .page { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 32px; } }
+
+/* Table of contents */
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 32px); align-self: start; display: flex; flex-direction: column; gap: 14px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--rule); }
+.toc a { display: block; padding: 4px 0 4px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+.toc a:hover { color: var(--ink); border-left-color: var(--rule); }
+.toc a.active { color: var(--ink); border-left-color: var(--work); font-weight: 600; }
+.toc .sub a { padding-left: 28px; font-size: 0.84rem; }
+.progress { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress b { color: var(--ok); }
+@media (max-width: 860px) { .toc { position: static; } .toc .sub { display: none; } }
+
+main { display: flex; flex-direction: column; gap: 64px; min-width: 0; }
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 24px; }
+.prose { max-width: 68ch; display: flex; flex-direction: column; gap: 14px; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.25em; display: flex; flex-direction: column; gap: 6px; }
+
+/* Header */
+header.hero { display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
+.hero .lede { font-size: 1.15rem; color: var(--muted); max-width: 60ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 0.85rem; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 600 0.78rem/1 var(--mono); padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.work { color: var(--work); background: var(--work-soft); }
+.chip.personal { color: var(--personal); background: var(--personal-soft); }
+
+/* Routing diagram */
+.routes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 620px) { .routes { grid-template-columns: minmax(0, 1fr); } }
+.lane { background: var(--surface); border: 1px solid var(--rule); border-top: 3px solid var(--c); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.lane.work { --c: var(--work); } .lane.personal { --c: var(--personal); }
+.lane .where { font: 600 0.95rem/1.35 var(--mono); color: var(--c); overflow-wrap: anywhere; }
+.lane dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 0.9rem; }
+.lane dt { color: var(--muted); }
+.lane dd { margin: 0; font-family: var(--mono); font-size: 0.84rem; overflow-wrap: anywhere; }
+.switchbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 18px; border: 1px dashed var(--rule); border-radius: 10px; font-size: 0.92rem; }
+.switchbar strong { font-family: var(--display); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 0.74rem/1.3 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--sunken); }
+td:first-child { font-weight: 600; }
+.yes { color: var(--warn); font-weight: 700; } .no { color: var(--ok); font-weight: 700; }
+
+/* Steps */
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; counter-reset: step; }
+.step { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 0 20px; position: relative; padding-bottom: 36px; }
+.step:not(:last-child)::before { content: ""; position: absolute; left: 21px; top: 46px; bottom: 6px; width: 2px; background: var(--rule); }
+.num { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 700 1.05rem/1 var(--display); background: var(--surface); border: 2px solid var(--rule); color: var(--muted); font-variant-numeric: tabular-nums; }
+.step.done .num { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+.step-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 8px; }
+.step-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.done-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--muted); cursor: pointer; user-select: none; }
+.done-toggle input { accent-color: var(--ok); width: 16px; height: 16px; margin: 0; }
+.step-body > p, .step-body > ul { max-width: 68ch; }
+.step-body ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 5px; }
+
+/* Code */
+.code { position: relative; background: var(--sunken); border: 1px solid var(--rule); border-radius: 8px; }
+.code .label { display: flex; justify-content: space-between; align-items: center; padding: 7px 8px 0 14px; font: 600 0.7rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.code pre { margin: 0; padding: 10px 14px 14px; overflow-x: auto; font: 0.84rem/1.6 var(--mono); tab-size: 2; }
+.code pre .c { color: var(--muted); }
+.code pre .w { color: var(--work); } .code pre .p { color: var(--personal); } .code pre .k { color: var(--warn); font-weight: 600; }
+.copy { font: 600 0.72rem/1 var(--body); color: var(--muted); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 5px 9px; cursor: pointer; }
+.copy:hover { color: var(--ink); }
+.copy.ok { color: var(--ok); border-color: var(--ok); }
+
+/* Callouts */
+.note { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 8px; background: var(--work-soft); font-size: 0.93rem; max-width: 72ch; }
+.note.warn { background: var(--warn-soft); }
+.note b.t { font: 600 0.72rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--work); }
+.note.warn b.t { color: var(--warn); }
+
+/* Troubleshooting */
+.faults { display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+.faults details { border-bottom: 1px solid var(--rule); }
+.faults details:last-child { border-bottom: 0; }
+.faults summary { cursor: pointer; padding: 14px 18px; font-weight: 600; list-style: none; display: flex; gap: 12px; align-items: baseline; }
+.faults summary::-webkit-details-marker { display: none; }
+.faults summary::before { content: "+"; font-family: var(--mono); color: var(--muted); width: 1ch; flex: none; }
+.faults details[open] summary::before { content: "\2212"; }
+.faults .fix { padding: 0 18px 18px 42px; display: flex; flex-direction: column; gap: 10px; font-size: 0.93rem; }
+.faults .fix p { max-width: 68ch; }
+.faults .cause { color: var(--muted); }
+
+footer { max-width: 1120px; margin: 0 auto; padding-block: 28px 48px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font-size: 0.82rem; color: var(--muted); }
+
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } .num { transition: background 0.2s, border-color 0.2s, color 0.2s; } }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Contents">
+    <span class="eyebrow">Contents</span>
+    <ol>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#before">Before you start</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li class="sub"><a href="#s1">1 · Choose the folder</a></li>
+      <li class="sub"><a href="#s2">2 · Fill in profiles</a></li>
+      <li class="sub"><a href="#s3">3 · Choose the key</a></li>
+      <li class="sub"><a href="#s4">4 · Run setup</a></li>
+      <li class="sub"><a href="#s5">5 · Sign in to gh</a></li>
+      <li class="sub"><a href="#s6">6 · Upload signing key</a></li>
+      <li class="sub"><a href="#s7">7 · Switch back</a></li>
+      <li class="sub"><a href="#s8">8 · Verify</a></li>
+      <li><a href="#daily">Daily use</a></li>
+      <li><a href="#status">Reading status</a></li>
+      <li><a href="#trouble">Troubleshooting</a></li>
+      <li><a href="#maintain">Changes and removal</a></li>
+      <li><a href="#reference">Reference</a></li>
+    </ol>
+    <span class="progress" id="progress" aria-live="polite">Setup: <b>0</b> of 8 steps done</span>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <span class="eyebrow">How-to guide · <code>E:\personal\gh-profile-switcher</code></span>
+      <h1>GitHub Profile Switcher</h1>
+      <p class="lede">Use your Spursol and personal GitHub accounts on one Windows laptop. Each repo gets the right name, email, signing key and push account automatically, based on the folder it is in.</p>
+      <div class="meta">
+        <span>Version 1.5</span><span>Last updated 2026-09-30</span><span>Tested with Git 2.55, gh 2.101, GCM 2.9, PowerShell 7</span>
+      </div>
+    </header>
+
+    <!-- HOW IT WORKS -->
+    <section id="how">
+      <span class="eyebrow">Overview</span>
+      <h2>How it works</h2>
+      <div class="prose">
+        <p>The folder a repo is in decides which identity git uses. Nothing has to be switched for git. Repos under your personal folder use the personal profile, and every other repo uses the work profile, as they do today.</p>
+        <p>The folder rule applies only inside a git repo. Git checks the rule against the repo's <code>.git</code> folder, so in a directory that is not a repo, including <code>E:\personal</code> itself, git uses the work profile. A repo you create or clone anywhere under <code>E:\personal\</code> gets the personal profile.</p>
+      </div>
+      <div class="routes">
+        <div class="lane work">
+          <span class="chip work">work · default</span>
+          <span class="where">Any repo outside E:/personal/</span>
+          <dl>
+            <dt>Email</dt><dd>you@work.example</dd>
+            <dt>Signing key</dt><dd>~/.ssh/id_ed25519.pub</dd>
+            <dt>Pushes as</dt><dd>your-work-user</dd>
+            <dt>Set in</dt><dd>~/.gitconfig</dd>
+          </dl>
+        </div>
+        <div class="lane personal">
+          <span class="chip personal">personal</span>
+          <span class="where">Any repo under E:/personal/</span>
+          <dl>
+            <dt>Email</dt><dd>your personal email</dd>
+            <dt>Signing key</dt><dd>~/.ssh/id_ed25519_personal.pub</dd>
+            <dt>Pushes as</dt><dd>your personal username</dd>
+            <dt>Set in</dt><dd>~/.gitconfig-personal</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="switchbar">
+        <strong>The one thing you switch:</strong>
+        <span>the <code>gh</code> CLI, which has one active account at a time. Use <code>.\ghprofile.ps1 switch personal</code> or <code>switch work</code> before running <code>gh pr</code>, <code>gh issue</code> or <code>gh repo</code> commands.</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What</th><th>How it is chosen</th><th>Switch needed?</th></tr></thead>
+          <tbody>
+            <tr><td>Commit name and email</td><td>A folder rule in <code>~/.gitconfig</code> (<code>includeIf "gitdir/i:E:/personal/"</code>) loads <code>~/.gitconfig-personal</code></td><td class="no">No</td></tr>
+            <tr><td>Commit signing key</td><td>The same file sets <code>user.signingkey</code></td><td class="no">No</td></tr>
+            <tr><td>Push and fetch account</td><td>The same file sets <code>credential.https://github.com.username</code>. Git Credential Manager uses the stored login for that account.</td><td class="no">No</td></tr>
+            <tr><td><code>gh</code> CLI account</td><td><code>gh auth switch</code></td><td class="yes">Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose">
+        <p><strong>Why this is lossless:</strong> both accounts stay signed in at the same time, in Git Credential Manager and in <code>gh</code>. Switching never signs you out or deletes anything, and <code>setup</code> backs up <code>~/.gitconfig</code> before each change. The folder rule also applies during <code>git clone</code>, so a clone into the personal folder uses the personal account from the first request.</p>
+      </div>
+    </section>
+
+    <!-- BEFORE YOU START -->
+    <section id="before">
+      <span class="eyebrow">Checklist</span>
+      <h2>Before you start</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>You need</th><th>Why</th><th>How to check</th></tr></thead>
+          <tbody>
+            <tr><td>Your personal GitHub username</td><td>Goes in <code>profiles.json</code></td><td>github.com → your avatar → profile URL</td></tr>
+            <tr><td>A personal email that is <em>verified</em> on the personal account</td><td>GitHub marks a signed commit Verified only when its email is a verified address on the account</td><td>github.com/settings/emails</td></tr>
+            <tr><td>The personal account's email privacy setting</td><td>If "Block command line pushes that expose my email" is on, pushes using your gmail address are rejected. Use the account's noreply address instead.</td><td>github.com/settings/emails</td></tr>
+            <tr><td>Git for Windows, <code>gh</code>, PowerShell 7</td><td>Already installed on this laptop</td><td><code>git --version</code>, <code>gh --version</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <b class="t">Current state</b>
+        <p><code>gh</code> is signed in as <code>your-work-user</code> over HTTPS. Git Credential Manager is the credential helper, and every commit is signed with an SSH key (<code>commit.gpgsign = true</code>, <code>gpg.format = ssh</code>).</p>
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section id="setup">
+      <span class="eyebrow">One-time · about 10 minutes</span>
+      <h2>Setup</h2>
+      <div class="prose"><p>Run the commands from a PowerShell window in <code>E:\personal\gh-profile-switcher</code>. Tick each step as you finish it. The page remembers your ticks in this browser.</p></div>
+
+      <ol class="steps">
+        <li class="step" id="s1" data-step="1">
+          <span class="num">1</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Choose the personal folder</h3><label class="done-toggle"><input type="checkbox" id="done-1"> Done</label></div>
+            <p>All personal repos will live under one folder. The default is <code>E:/personal/</code>, and <code>setup</code> creates it if it is missing. Any folder works, as long as no work repo will ever sit inside it.</p>
+            <p>If you already have personal repos elsewhere, move them into this folder after setup. Moving the folder is all that is needed.</p>
+          </div>
+        </li>
+
+        <li class="step" id="s2" data-step="2">
+          <span class="num">2</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Fill in <code>profiles.json</code></h3><label class="done-toggle"><input type="checkbox" id="done-2"> Done</label></div>
+            <p>Copy <code>profiles.example.json</code> to <code>profiles.json</code> and replace every <code>REPLACE-ME</code> value. Change <code>root</code> if you chose a different folder in step 1. <code>profiles.json</code> is git-ignored, so your real names and emails stay out of the repo.</p>
+            <div class="code">
+              <div class="label">profiles.json</div>
+<pre>{
+  "default": "work",
+  "profiles": {
+    <span class="w">"work"</span>: {
+      "name": <span class="k">"REPLACE-ME"</span>,
+      "email": <span class="k">"REPLACE-ME@work.example"</span>,
+      "ghUser": <span class="k">"REPLACE-ME"</span>,
+      "signingKey": "~/.ssh/id_ed25519.pub"
+    },
+    <span class="p">"personal"</span>: {
+      "name": <span class="k">"REPLACE-ME"</span>,
+      "email": <span class="k">"REPLACE-ME@gmail.com"</span>,     <span class="c">// verified email, or the noreply address</span>
+      "ghUser": <span class="k">"REPLACE-ME"</span>,               <span class="c">// personal GitHub username</span>
+      "signingKey": "~/.ssh/id_ed25519_personal.pub",
+      "root": "E:/personal/"
+    }
+  }
+}</pre>
+            </div>
+            <p>The <code>//</code> comments above are for this guide only. JSON does not allow comments, so do not add them to the file.</p>
+          </div>
+        </li>
+
+        <li class="step" id="s3" data-step="3">
+          <span class="num">3</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Choose the personal signing key</h3><label class="done-toggle"><input type="checkbox" id="done-3"> Done</label></div>
+            <p>Each account signs with its own SSH key. Choose one of these:</p>
+            <ul>
+              <li><strong>New key (recommended).</strong> Leave <code>signingKey</code> as it is. <code>setup</code> runs <code>ssh-keygen</code> for you in step 4.</li>
+              <li><strong>Existing key.</strong> Copy <em>both</em> files of the key pair into <code>~/.ssh</code>: the private key and its <code>.pub</code> file, with the same name except for the <code>.pub</code> ending (for example <code>id_ed25519_personal</code> and <code>id_ed25519_personal.pub</code>). Then set <code>signingKey</code> to the <code>.pub</code> path.</li>
+            </ul>
+            <div class="note warn">
+              <b class="t">The private key must sit next to the .pub file</b>
+              <p>Git signs by running <code>ssh-keygen</code> with the <code>.pub</code> path. With <code>ssh-agent</code> disabled, as it is on this laptop, <code>ssh-keygen</code> loads the private key from the same path without <code>.pub</code>. If that file is missing, every signed commit fails. <code>setup</code> stops with an error when a <code>.pub</code> file has no private key next to it.</p>
+            </div>
+            <div class="note">
+              <b class="t">Why not reuse the work key</b>
+              <p>A separate key keeps the two accounts independent. Removing the work key when you leave Spursol, or rotating it, does not affect your personal commit signatures.</p>
+            </div>
+          </div>
+        </li>
+
+        <li class="step" id="s4" data-step="4">
+          <span class="num">4</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Run setup</h3><label class="done-toggle"><input type="checkbox" id="done-4"> Done</label></div>
+            <div class="code">
+              <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
+<pre>.\ghprofile.ps1 setup</pre>
+            </div>
+            <p>If a new key is generated, you are asked for a passphrase. The passphrase protects the key. With <code>ssh-agent</code> disabled on this laptop, git will ask for it each time it signs a commit. Leave the passphrase empty if you don't want that prompt.</p>
+            <p>What <code>setup</code> changes:</p>
+            <ul>
+              <li>Copies <code>~/.gitconfig</code> to <code>~/.gitconfig.bak-&lt;timestamp&gt;</code></li>
+              <li>Sets the work name, email, signing key and push account in <code>~/.gitconfig</code></li>
+              <li>Writes <code>~/.gitconfig-personal</code> and adds the folder rule that loads it</li>
+              <li>Creates the personal folder and, if missing, the personal signing key</li>
+              <li>Adds each signing key to <code>~/.ssh/allowed_signers</code> so git can verify signatures locally</li>
+            </ul>
+            <p>It ends by printing the commands for steps 5 to 7. It is safe to run again. Repeat runs don't create duplicate entries.</p>
+            <div class="note warn">
+              <b class="t">If PowerShell refuses to run the script</b>
+              <p>Run <code>Unblock-File .\ghprofile.ps1</code> once, or run it with <code>pwsh -ExecutionPolicy Bypass -File .\ghprofile.ps1 setup</code>.</p>
+            </div>
+          </div>
+        </li>
+
+        <li class="step" id="s5" data-step="5">
+          <span class="num">5</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Sign in to <code>gh</code> as the personal account</h3><label class="done-toggle"><input type="checkbox" id="done-5"> Done</label></div>
+            <p>This adds a second account to <code>gh</code>. The work login stays. Before you run it, sign in to <em>github.com</em> in your browser as the personal account, or use a private window, so the browser approves the right account.</p>
+            <div class="code">
+              <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
+<pre>gh auth login --hostname github.com --git-protocol https --web --scopes write:ssh_signing_key</pre>
+            </div>
+            <p><code>write:ssh_signing_key</code> allows <code>gh</code> to upload the signing key in the next step. GitHub doesn't grant this permission by default. After sign-in, the personal account becomes the active <code>gh</code> account.</p>
+          </div>
+        </li>
+
+        <li class="step" id="s6" data-step="6">
+          <span class="num">6</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Upload the personal signing key</h3><label class="done-toggle"><input type="checkbox" id="done-6"> Done</label></div>
+            <p>With the personal account active, upload the public key as a <strong>signing</strong> key:</p>
+            <div class="code">
+              <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
+<pre>gh ssh-key add $HOME/.ssh/id_ed25519_personal.pub --type signing --title "$env:COMPUTERNAME signing"</pre>
+            </div>
+            <p>To use the website instead: github.com/settings/keys → <em>New SSH key</em> → set <em>Key type</em> to <em>Signing Key</em> → paste the contents of the <code>.pub</code> file.</p>
+            <p>The work key should already be on <code>your-work-user</code> as a signing key, because your work commits are already signed. Check at github.com/settings/keys while signed in as that account.</p>
+          </div>
+        </li>
+
+        <li class="step" id="s7" data-step="7">
+          <span class="num">7</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Switch <code>gh</code> back to work</h3><label class="done-toggle"><input type="checkbox" id="done-7"> Done</label></div>
+            <div class="code">
+              <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
+<pre>.\ghprofile.ps1 switch work</pre>
+            </div>
+            <p>Work is your main account, so keep <code>gh</code> on it by default. <code>switch</code> prints <code>status</code> afterwards.</p>
+          </div>
+        </li>
+
+        <li class="step" id="s8" data-step="8">
+          <span class="num">8</span>
+          <div class="step-body">
+            <div class="step-head"><h3>Verify both identities</h3><label class="done-toggle"><input type="checkbox" id="done-8"> Done</label></div>
+            <p>Make a throwaway repo in the personal folder, make a signed commit, and check the signature:</p>
+            <div class="code">
+              <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
+<pre>git init E:\personal\signing-test
+cd E:\personal\signing-test
+E:\personal\gh-profile-switcher\ghprofile.ps1 status
+git commit --allow-empty -m "signing test"
+git log --show-signature -1</pre>
+            </div>
+            <ul>
+              <li><code>status</code> shows <span class="chip personal">personal</span>, your personal email and <code>id_ed25519_personal.pub</code>.</li>
+              <li><code>git log --show-signature</code> shows <em>Good "git" signature for</em> your personal email.</li>
+              <li>Run <code>status</code> in any work repo. It shows <span class="chip work">work</span> and <code>you@work.example</code>.</li>
+            </ul>
+            <p><strong>First push from a personal repo:</strong> Git Credential Manager opens a sign-in window once for the personal account and remembers it. To confirm both accounts are stored, run:</p>
+            <div class="code">
+              <div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div>
+<pre>git credential-manager github list</pre>
+            </div>
+            <p>After you push, the commit shows <em>Verified</em> on GitHub. Delete <code>E:\personal\signing-test</code> when you're done.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- DAILY USE -->
+    <section id="daily">
+      <span class="eyebrow">Routine</span>
+      <h2>Daily use</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>I want to…</th><th>Do this</th></tr></thead>
+          <tbody>
+            <tr><td>Work on Spursol code</td><td>Nothing. Work anywhere outside the personal folder.</td></tr>
+            <tr><td>Start a personal repo</td><td><code>git clone https://github.com/&lt;you&gt;/&lt;repo&gt;</code> or <code>git init</code> inside <code>E:\personal\</code></td></tr>
+            <tr><td>Bring an existing personal repo over</td><td>Move its folder into <code>E:\personal\</code>. Commits made before the move keep the email they were made with.</td></tr>
+            <tr><td>Open a PR or issue on the personal account</td><td><code>.\ghprofile.ps1 switch personal</code>, run your <code>gh</code> commands, then <code>.\ghprofile.ps1 switch work</code></td></tr>
+            <tr><td>Check which identity applies here</td><td><code>.\ghprofile.ps1 status</code></td></tr>
+            <tr><td>Use the web UI on the personal account</td><td>Use a separate browser profile for personal GitHub. This script doesn't manage browser sessions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <b class="t">Shorter command</b>
+        <p>Add <code>Set-Alias ghp E:\personal\gh-profile-switcher\ghprofile.ps1</code> to your PowerShell <code>$PROFILE</code>. You can then type <code>ghp status</code> or <code>ghp switch personal</code> from any folder.</p>
+      </div>
+    </section>
+
+    <!-- STATUS -->
+    <section id="status">
+      <span class="eyebrow">Checking</span>
+      <h2>Reading <code>status</code></h2>
+      <div class="prose"><p>Run <code>status</code> inside a repo. It shows what git and <code>gh</code> will use in that directory. Example from a personal repo while <code>gh</code> is still on work:</p></div>
+      <div class="code">
+        <div class="label">Output</div>
+<pre>Directory      : E:\personal\blog
+git profile    : <span class="p">personal</span>
+git identity   : Your Name &lt;you@gmail.com&gt;
+git signing key: C:/Users/you/.ssh/id_ed25519_personal.pub
+git push as    : <span class="p">your-personal-user</span>
+gh CLI as      : <span class="w">your-work-user</span>
+<span class="k">WARNING: gh CLI is 'your-work-user' but this directory is 'personal'. Run: .\ghprofile.ps1 switch personal</span></pre>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Line</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>git profile</td><td>The profile whose email matches this repo's effective <code>user.email</code>. <code>&lt;none matched&gt;</code> means the repo overrides the email itself. <code>&lt;none - not inside a git repo&gt;</code> means the folder rule does not apply here (see <a href="#how">How it works</a>). The output then skips the git lines and prints the folder rule instead, as shown below.</td></tr>
+            <tr><td>git identity</td><td>The author name and email for new commits</td></tr>
+            <tr><td>git signing key</td><td>The key used to sign new commits</td></tr>
+            <tr><td>git push as</td><td>The GitHub account Git Credential Manager uses for push and fetch</td></tr>
+            <tr><td>gh CLI as</td><td>The active <code>gh</code> account. The warning appears only inside a repo, and only when this differs from the repo's profile. It affects <code>gh</code> commands only, never commits or pushes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose"><p>Outside a repo, <code>status</code> (and <code>switch</code>, which prints it) shows only the <code>gh</code> account and the folder rule. It leaves out the git lines, because there they would show the work defaults even after <code>switch personal</code>:</p></div>
+      <div class="code">
+        <div class="label">Output</div>
+<pre>Directory      : E:\personal\gh-profile-switcher
+git profile    : &lt;none - not inside a git repo&gt;
+gh CLI as      : <span class="p">your-personal-user</span>
+
+Git picks the identity per repo: repos under E:/personal/ use 'personal'; all other repos use 'work'.
+Run status inside a repo to see the identity it will use there.</pre>
+      </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section id="trouble">
+      <span class="eyebrow">When something is off</span>
+      <h2>Troubleshooting</h2>
+      <div class="faults">
+        <details>
+          <summary>A commit has the wrong email</summary>
+          <div class="fix">
+            <p class="cause">Usual cause: the repo is not under the personal folder, or the repo sets its own <code>user.email</code>.</p>
+            <p>See where the email comes from:</p>
+            <div class="code"><div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>git config --show-origin user.email</pre></div>
+            <p>If the value comes from <code>.git/config</code>, remove it with <code>git config --unset user.email</code>. To fix the last commit <em>before it is pushed</em>, run <code>git commit --amend --reset-author --no-edit</code>.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Push fails with "Permission denied" or 403</summary>
+          <div class="fix">
+            <p class="cause">Usual cause: the push used the other account.</p>
+            <p>Check the <em>git push as</em> line in <code>status</code>. If the remote URL contains a username (<code>https://someone@github.com/…</code>), that username takes priority. Remove it with <code>git remote set-url origin https://github.com/&lt;owner&gt;/&lt;repo&gt;</code>.</p>
+            <p>If a stored login is broken, remove that account from Git Credential Manager and push again to sign in fresh:</p>
+            <div class="code"><div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>git credential-manager github list
+git credential-manager github logout &lt;account&gt;</pre></div>
+          </div>
+        </details>
+        <details>
+          <summary>GitHub shows the commit as "Unverified"</summary>
+          <div class="fix">
+            <p class="cause">Usual causes: the key was uploaded as an authentication key instead of a signing key, or the commit email is not verified on that account.</p>
+            <p>At github.com/settings/keys, the key must be listed under <em>Signing keys</em>. At github.com/settings/emails, the commit email must show as verified. After fixing it, push a new signed commit to confirm it shows Verified.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Push rejected because it would publish a private email</summary>
+          <div class="fix">
+            <p class="cause">Cause: the personal account blocks command-line pushes that expose its email.</p>
+            <p>Put the account's noreply address (shown at github.com/settings/emails) in <code>profiles.json</code>, run <code>setup</code> again, and amend the unpushed commits with <code>git commit --amend --reset-author --no-edit</code>.</p>
+          </div>
+        </details>
+        <details>
+          <summary><code>gh ssh-key add</code> says a scope is missing</summary>
+          <div class="fix">
+            <p>Grant the scope to the active account, then retry step 6:</p>
+            <div class="code"><div class="label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>gh auth refresh --hostname github.com --scopes write:ssh_signing_key</pre></div>
+          </div>
+        </details>
+        <details>
+          <summary><code>switch</code> says gh has no login for the account</summary>
+          <div class="fix">
+            <p>That account was never added to <code>gh</code>, or it was signed out. Repeat step 5.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Git asks for a passphrase on every commit</summary>
+          <div class="fix">
+            <p>This is expected when the signing key has a passphrase and <code>ssh-agent</code> is disabled, as it is on this laptop. This guide does not cover agent setup.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Commit fails with "No private key found for public key"</summary>
+          <div class="fix">
+            <p class="cause">Cause: only the <code>.pub</code> file is in <code>~/.ssh</code>, and its private key is missing. See the warning in <a href="#s3">step 3</a>.</p>
+            <p>Copy the private key into <code>~/.ssh</code> under the same name without <code>.pub</code>, then commit again. If you no longer have the private key, delete the <code>.pub</code> file, run <code>setup</code> to generate a new pair, and repeat <a href="#s6">step 6</a> to upload it.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- MAINTENANCE -->
+    <section id="maintain">
+      <span class="eyebrow">Later</span>
+      <h2>Changes and removal</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Task</th><th>Steps</th></tr></thead>
+          <tbody>
+            <tr><td>Change an email, name or key</td><td>Edit <code>profiles.json</code>, then run <code>.\ghprofile.ps1 setup</code>. For a new key, repeat step 6 for that account.</td></tr>
+            <tr><td>Move the personal folder</td><td>Edit <code>root</code>, run <code>setup</code>, move the repos, then remove the old rule:<br><code>git config --global --unset "includeIf.gitdir/i:E:/personal/.path"</code> (use the old path)</td></tr>
+            <tr><td>Add a third account</td><td>Add a profile with its own <code>root</code> to <code>profiles.json</code>, run <code>setup</code>, then do steps 5 to 7 for it</td></tr>
+            <tr><td>Undo the last setup run</td><td>Copy the newest <code>~/.gitconfig.bak-&lt;timestamp&gt;</code> over <code>~/.gitconfig</code>. Logins stored in <code>gh</code> and Git Credential Manager are not affected.</td></tr>
+            <tr><td>Remove the personal account completely</td><td>
+              <code>git config --global --unset "includeIf.gitdir/i:E:/personal/.path"</code><br>
+              delete <code>~/.gitconfig-personal</code><br>
+              <code>gh auth logout --hostname github.com --user &lt;personal-user&gt;</code><br>
+              <code>git credential-manager github logout &lt;personal-user&gt;</code><br>
+              delete the personal line in <code>~/.ssh/allowed_signers</code>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- REFERENCE -->
+    <section id="reference">
+      <span class="eyebrow">Reference</span>
+      <h2>Files and limits</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>File</th><th>Owner</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>E:\personal\gh-profile-switcher\profiles.json</code></td><td>You</td><td>The only file you edit. Defines each profile. Git-ignored.</td></tr>
+            <tr><td><code>E:\personal\gh-profile-switcher\profiles.example.json</code></td><td>Tool</td><td>Template for <code>profiles.json</code>, with placeholder values</td></tr>
+            <tr><td><code>E:\personal\gh-profile-switcher\ghprofile.ps1</code></td><td>Tool</td><td><code>setup</code>, <code>switch &lt;profile&gt;</code>, <code>status</code></td></tr>
+            <tr><td><code>~/.gitconfig</code></td><td>setup</td><td>Work identity and one folder rule per extra profile</td></tr>
+            <tr><td><code>~/.gitconfig-personal</code></td><td>setup</td><td>Personal identity, signing key and push account. It is regenerated on every run, so edit <code>profiles.json</code> instead.</td></tr>
+            <tr><td><code>~/.gitconfig.bak-&lt;timestamp&gt;</code></td><td>setup</td><td>Backup taken before each run</td></tr>
+            <tr><td><code>~/.ssh/allowed_signers</code></td><td>setup</td><td>Lets git verify both keys' signatures locally</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose">
+        <h3>Limits</h3>
+        <ul>
+          <li>The <code>gh</code> CLI account is global. <code>status</code> warns when it doesn't match the directory, but it doesn't switch it for you.</li>
+          <li>HTTPS remotes only. SSH remotes would need a host alias for each account in <code>~/.ssh/config</code>.</li>
+          <li>A username embedded in a remote URL overrides the profile's push account.</li>
+          <li>Browser sessions on github.com are not managed.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <span>GitHub Profile Switcher · Version 1.5 · Last updated 2026-09-30</span>
+  <span>Produced with Claude Code (CLI on Windows, PowerShell), model Claude Opus 5.5</span>
+</footer>
+
+<script>
+(function () {
+  // Copy buttons
+  document.querySelectorAll('.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = btn.closest('.code').querySelector('pre');
+      var text = pre.innerText.trim();
+      var done = function () { btn.textContent = 'Copied'; btn.classList.add('ok'); setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 1600); };
+      var select = function () { var r = document.createRange(); r.selectNodeContents(pre); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Press Ctrl+C'; };
+      try { navigator.clipboard.writeText(text).then(done, select); } catch (e) { select(); }
+    });
+  });
+
+  // Step progress, remembered per browser
+  var KEY = 'ghps-steps';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  var boxes = document.querySelectorAll('.done-toggle input');
+  function render() {
+    var n = 0;
+    boxes.forEach(function (b) { var s = b.closest('.step'); s.classList.toggle('done', b.checked); if (b.checked) n++; });
+    document.querySelector('#progress b').textContent = n;
+  }
+  boxes.forEach(function (b) {
+    b.checked = !!saved[b.id];
+    b.addEventListener('change', function () {
+      saved[b.id] = b.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+      render();
+    });
+  });
+  render();
+
+  // Highlight current section in contents
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var targets = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function () {
+      var current = 0;
+      targets.forEach(function (t, i) { if (t && t.getBoundingClientRect().top < window.innerHeight * 0.3) current = i; });
+      links.forEach(function (a, i) { a.classList.toggle('active', i === current); });
+    }, { rootMargin: '0px 0px -60% 0px', threshold: [0, 1] });
+    targets.forEach(function (t) { if (t) io.observe(t); });
+  }
+})();
+</script>
