@@ -19,10 +19,23 @@ param(
     [switch]$NonInteractive
 )
 
-$ScriptVersion = '0.3.1'
+$ScriptVersion = '0.3.2'
 if ($Version -or $Command -eq '--version') { Write-Output "v$ScriptVersion"; exit 0 }
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+function Assert-Prerequisites {
+    $missing = @(
+        foreach ($tool in @('gh', 'git')) {
+            if (-not (Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue)) {
+                if ($tool -eq 'gh') { 'GitHub CLI (gh)' } else { 'Git CLI (git)' }
+            }
+        }
+    )
+    if ($missing.Count) {
+        throw "Missing required command(s): $($missing -join ', '). Install the missing tools and add them to PATH, then retry."
+    }
+}
 
 function Invoke-Native {
     param([string]$Exe, [string[]]$Arguments, [int[]]$Allowed = @(0), [switch]$Interactive, [switch]$CaptureOutput)
@@ -646,6 +659,7 @@ try {
     if ($Command -notin @('setup','status','doctor','switch','init-key')) { throw 'Usage: ghprofile.ps1 setup|status|doctor|switch <profile>|init-key <profile>|--version [-ConfigPath path] [-Json] [-NonInteractive] [-WhatIf]' }
     if ($Name -and $Command -notin @('switch','init-key')) { throw 'A profile argument is only valid for switch and init-key.' }
     if ($Json -and $Command -notin @('status','doctor')) { throw '-Json is supported by status and doctor.' }
+    Assert-Prerequisites
     if ($Command -eq 'setup') { Write-SetupEvent "ghprofile setup  v$ScriptVersion" 'Starting' 'Reading profile definitions and checking dependencies.' }
     $configuration = Read-Profiles
     $gitVersion = (Invoke-Native git @('--version')).Out

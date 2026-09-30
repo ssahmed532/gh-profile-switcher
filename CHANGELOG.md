@@ -1,12 +1,19 @@
 # Changelog
 
+## [0.3.2] - 2026-09-30
+
+- Check for GitHub CLI (`gh`) and Git CLI (`git`) executables on PATH before reading profiles for every operational command, including previews. Report all missing tools with installation guidance and exit 1.
+- Preserve dependency-free version output and structured status/doctor JSON errors. User-supplied Windows terminal verification passed all 24 checks on v0.3.2, completing the deferred Phase 1 acceptance.
+- Add a guided, resumable Windows verification runner with isolated fixtures, hash/lock checks, a bounded noninteractive test and reports; add 13 runner-helper checks and 14 prerequisite checks.
+- Document configuration and credential-storage ownership and locations using sanitized examples.
+
 ## [0.3.1] - 2026-09-30
 
 - Display native stdout/stderr prompts while interactive processes wait; capture public-key derivation stdout separately.
 - Terminate owned native children on pipeline cancellation before releasing key locks.
 - Escape terminal controls and directional overrides in external values before styling, including verbose, setup, error and streamed native output; preserve credential redaction across stream boundaries.
 - Refuse control characters in interactive native arguments because OpenSSH can write directly to the console.
-- Add deterministic prompt, cancellation, control-injection and streaming-redaction regression checks. Actual Windows terminal checks remain pending and will be performed separately; the patch version identifies the implemented fixes without claiming that manual verification is complete.
+- Add deterministic prompt, cancellation, control-injection and streaming-redaction regression checks. At v0.3.1 versioning, actual Windows terminal checks were deferred; the patch version identified the implemented fixes without claiming manual verification. That verification was subsequently completed on v0.3.2.
 
 ## [0.3.0] - 2026-09-30
 

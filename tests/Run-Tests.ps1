@@ -49,12 +49,12 @@ function GitValue([string]$Directory,[string]$Key) { (Run git @('config','--get'
 
 try {
     $r = Script @('--version','-ConfigPath',(Join-Path $scratch 'missing.json'))
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.1' -and -not $r.Error) '--version prints only v0.3.1 without config'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.2' -and -not $r.Error) '--version prints only v0.3.2 without config'
     $r = Script @('-Version')
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.1') 'PowerShell -Version alias'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.2') 'PowerShell -Version alias'
     $r = Script @('--version') $scratch @{ PATH='' }
-    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.1' -and -not $r.Error) 'Version works without Git, gh or OpenSSH on PATH'
-    Assert (([System.Management.Automation.SemanticVersion]::Parse($r.Out.Substring(1))).ToString() -ceq '0.3.1') 'Release version is valid SemVer'
+    Assert ($r.Code -eq 0 -and $r.Out -ceq 'v0.3.2' -and -not $r.Error) 'Version works without Git, gh or OpenSSH on PATH'
+    Assert (([System.Management.Automation.SemanticVersion]::Parse($r.Out.Substring(1))).ToString() -ceq '0.3.2') 'Release version is valid SemVer'
     $errors = $null; $tokens = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($scriptFile,[ref]$tokens,[ref]$errors)
     Assert ($errors.Count -eq 0) 'Script parses'

@@ -10,7 +10,7 @@ foreach ($fn in $ast.FindAll({param($n) $n -is [Management.Automation.Language.F
     . ([scriptblock]::Create($fn.Extent.Text))
 }
 $fixture = [pscustomobject]@{
-    Version='0.3.1'; Directory='C:/personal/gh-profile-switcher'; InRepository=$true
+    Version='0.3.2'; Directory='C:/personal/gh-profile-switcher'; InRepository=$true
     EffectiveProfile='personal'; ExpectedProfile='personal'; Healthy=$true
     Settings=@{
         author='Personal Example <personal@example.com>'; committer='Personal Example <personal@example.com>'
